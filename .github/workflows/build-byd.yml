@@ -1,0 +1,113 @@
+name: Build BYD APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  build:
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.event.head_commit.message, 'Merge pull request')
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Grant execute permission
+        run: chmod +x ./gradlew
+
+      - name: Decode Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > app/keystore.jks
+      - name: Create signing.properties
+        run: |
+          echo "STORE_FILE=keystore.jks" >> app/signing.properties
+          echo "KEY_ALIAS=${{ secrets.KEY_ALIAS }}" >> app/signing.properties
+          echo "KEY_PASSWORD=${{ secrets.KEY_PASSWORD }}" >> app/signing.properties
+      - name: Build Release APK
+        run: ./gradlew :app:assembleRelease
+
+      - name: Get APK path
+        id: apk-path
+        run: |
+          APK=$(find app/build/outputs/apk -name '*.apk' | head -n 1)
+          if [ -z "$APK" ]; then
+            echo "APK not found"
+            exit 1
+          fi
+          echo "path=$APK" >> $GITHUB_OUTPUT
+          echo "APK: $APK"
+
+      - name: Get APK info
+        id: apk-info
+        uses: hkusu/apk-info-action@v1
+        with:
+          apk-path: ${{ steps.apk-path.outputs.path }}
+
+      - name: Get bump commit message
+        id: commit
+        run: |
+          MESSAGE=$(git log --format=%B --grep='^bump:' -i -1)
+          
+          if [ -z "$MESSAGE" ]; then
+            echo "bump: commit not found"
+            exit 1
+          fi
+          
+          echo "message<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$MESSAGE" >> "$GITHUB_OUTPUT"
+          echo "EOF"
+
+      - name: Generate tag
+        id: tag
+        run: |
+          VERSION_NAME="${{ steps.apk-info.outputs.version-name }}"
+          
+          TAG="v${VERSION_NAME}"
+          echo "TAG=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Check if release exists
+        id: release-check
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION_NAME="${{ steps.apk-info.outputs.version-name }}"
+          TAG="v${VERSION_NAME}"
+      
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists"
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Release $TAG does not exist"
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create Release
+        if: steps.release-check.outputs.exists != 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.TAG }}
+          name: ${{ steps.tag.outputs.TAG }}
+          body: ${{ steps.commit.outputs.message }}
+          files: |
+            ${{ steps.apk-path.outputs.path }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
