@@ -123,7 +123,7 @@ Assistant/
 │               │   └── BootReceiver.kt      # Re-applies settings after boot
 │               ├── ui/theme/                # Material 3 theme styling
 │               └── util/
-│                   └── PermissionUtil.kt    # Dadb helper, store intent, & secure settings
+│                   └── Utils.kt    # Dadb helper, store intent, & secure settings
 ├── build.gradle.kts
 └── settings.gradle.kts
 ```

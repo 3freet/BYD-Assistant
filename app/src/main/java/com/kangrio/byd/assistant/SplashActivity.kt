@@ -5,14 +5,14 @@ import android.app.Activity
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Toast
-import com.kangrio.byd.assistant.util.PermissionUtil
+import com.kangrio.byd.assistant.util.Utils
 
 class StartActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val isGranted = PermissionUtil.isGranted(this, Manifest.permission.WRITE_SECURE_SETTINGS)
-        val isEnableVoiceAssistant = PermissionUtil.isEnableVoiceAssistant(this)
-        val isGoogleAppInstalled = PermissionUtil.isGoogleAppInstalled(this)
+        val isGranted = Utils.isGranted(this, Manifest.permission.WRITE_SECURE_SETTINGS)
+        val isEnableVoiceAssistant = Utils.isEnableVoiceAssistant(this)
+        val isGoogleAppInstalled = Utils.isGoogleAppInstalled(this)
         if (isGranted && isEnableVoiceAssistant && isGoogleAppInstalled) {
             try {
                 val intent = Intent(Intent.ACTION_VOICE_COMMAND)

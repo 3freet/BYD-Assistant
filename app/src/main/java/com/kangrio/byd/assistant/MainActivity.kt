@@ -65,7 +65,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kangrio.byd.assistant.ui.theme.AssistantTheme
-import com.kangrio.byd.assistant.util.PermissionUtil
+import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -110,12 +110,12 @@ fun Home(modifier: Modifier = Modifier) {
     var processing by remember { mutableStateOf(Processing(false, "")) }
 
     var isGoogleAppInstalled by remember {
-        mutableStateOf(PermissionUtil.isGoogleAppInstalled(context))
+        mutableStateOf(Utils.isGoogleAppInstalled(context))
     }
 
     var isGranted by remember {
         mutableStateOf(
-            PermissionUtil.isGranted(
+            Utils.isGranted(
                 context,
                 Manifest.permission.WRITE_SECURE_SETTINGS
             )
@@ -125,7 +125,7 @@ fun Home(modifier: Modifier = Modifier) {
     var isEnabledVoiceAssistant by remember {
         mutableStateOf(
             if (isGranted) {
-                PermissionUtil.isEnableVoiceAssistant(context)
+                Utils.isEnableVoiceAssistant(context)
             } else {
                 false
             }
@@ -136,13 +136,13 @@ fun Home(modifier: Modifier = Modifier) {
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
-                isGoogleAppInstalled = PermissionUtil.isGoogleAppInstalled(context)
-                isGranted = PermissionUtil.isGranted(
+                isGoogleAppInstalled = Utils.isGoogleAppInstalled(context)
+                isGranted = Utils.isGranted(
                     context,
                     Manifest.permission.WRITE_SECURE_SETTINGS
                 )
                 if (isGranted) {
-                    isEnabledVoiceAssistant = PermissionUtil.isEnableVoiceAssistant(context)
+                    isEnabledVoiceAssistant = Utils.isEnableVoiceAssistant(context)
                 }
             }
         }
@@ -200,7 +200,7 @@ fun Home(modifier: Modifier = Modifier) {
                     detailText = "Package Name:\ncom.google.android.googlequicksearchbox\n\nStatus:\n${if (isGoogleAppInstalled) "Installed and ready" else "Not installed. Install via Store below."}",
                     buttonText = if (isGoogleAppInstalled) "Installed" else "Install Google App",
                     onButtonClick = {
-                        PermissionUtil.openGoogleAppInStore(context)
+                        Utils.openGoogleAppInStore(context)
                     }
                 )
 
@@ -224,13 +224,13 @@ fun Home(modifier: Modifier = Modifier) {
                                 true,
                                 "Connecting via ADB to grant permission:\n${Manifest.permission.WRITE_SECURE_SETTINGS}"
                             )
-                            PermissionUtil.adbRequestPermission(
+                            Utils.adbRequestPermission(
                                 context,
                                 Manifest.permission.WRITE_SECURE_SETTINGS
                             )
                             delay(1200)
                             processing = Processing(false, "")
-                            isGranted = PermissionUtil.isGranted(
+                            isGranted = Utils.isGranted(
                                 context,
                                 Manifest.permission.WRITE_SECURE_SETTINGS
                             )
@@ -257,9 +257,9 @@ fun Home(modifier: Modifier = Modifier) {
                                 true,
                                 "Writing voice interaction settings for Google Assistant..."
                             )
-                            PermissionUtil.enableVoiceAssistant(context)
+                            Utils.enableVoiceAssistant(context)
                             delay(1000)
-                            isEnabledVoiceAssistant = PermissionUtil.isEnableVoiceAssistant(context)
+                            isEnabledVoiceAssistant = Utils.isEnableVoiceAssistant(context)
                             processing = Processing(false, "")
                         }
                     }
