@@ -1,5 +1,7 @@
 import java.text.SimpleDateFormat
 import java.util.Date
+import java.util.Properties
+import kotlin.apply
 
 plugins {
     alias(libs.plugins.android.application)
@@ -22,10 +24,28 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (file("signing.properties").exists()) {
+            create("release") {
+                val properties = Properties().apply {
+                    file("signing.properties").inputStream().use { load(it) }
+                }
+
+                keyAlias = properties["KEY_ALIAS"] as String
+                keyPassword = properties["KEY_PASSWORD"] as String
+                storeFile = file(properties["STORE_FILE"] as String)
+                storePassword = properties["KEY_PASSWORD"] as String
+            }
+        }
+    }
+
     buildTypes {
         release {
             optimization {
                 enable = true
+            }
+            if (file("signing.properties").exists()) {
+                signingConfig = signingConfigs.getByName("release")
             }
         }
     }
