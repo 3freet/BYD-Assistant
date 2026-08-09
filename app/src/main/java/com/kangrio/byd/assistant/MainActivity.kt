@@ -124,11 +124,7 @@ fun Home(modifier: Modifier = Modifier) {
 
     var isEnabledVoiceAssistant by remember {
         mutableStateOf(
-            if (isGranted) {
-                Utils.isEnableVoiceAssistant(context)
-            } else {
-                false
-            }
+            Utils.isEnableVoiceAssistant(context)
         )
     }
 
