@@ -1,4 +1,4 @@
-name: Build BYD APK
+name: Build APK
 
 on:
   push:
@@ -74,7 +74,7 @@ jobs:
           
           echo "message<<EOF" >> "$GITHUB_OUTPUT"
           echo "$MESSAGE" >> "$GITHUB_OUTPUT"
-          echo "EOF"
+          echo "EOF" >> "$GITHUB_OUTPUT"
 
       - name: Generate tag
         id: tag
