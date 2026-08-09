@@ -82,7 +82,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        finishAffinity()
+        if (Utils.isGranted(this, Manifest.permission.WRITE_SECURE_SETTINGS) &&
+            Utils.isEnableVoiceAssistant(this)) {
+            finishAffinity()
+        }
     }
 }
 
