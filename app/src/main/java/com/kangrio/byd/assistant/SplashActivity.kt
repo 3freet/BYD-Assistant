@@ -12,12 +12,13 @@ class StartActivity : Activity() {
         super.onCreate(savedInstanceState)
         val isGranted = PermissionUtil.isGranted(this, Manifest.permission.WRITE_SECURE_SETTINGS)
         val isEnableVoiceAssistant = PermissionUtil.isEnableVoiceAssistant(this)
-        if (isGranted && isEnableVoiceAssistant) {
+        val isGoogleAppInstalled = PermissionUtil.isGoogleAppInstalled(this)
+        if (isGranted && isEnableVoiceAssistant && isGoogleAppInstalled) {
             try {
                 val intent = Intent(Intent.ACTION_VOICE_COMMAND)
                 intent.setPackage("com.google.android.googlequicksearchbox")
                 startActivity(intent)
-            }catch (e: Throwable) {
+            } catch (e: Throwable) {
                 Toast.makeText(this, "${e.message}", Toast.LENGTH_LONG).show()
             }
         } else {

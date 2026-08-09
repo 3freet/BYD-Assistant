@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.ContentCopy
@@ -44,6 +45,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -59,6 +61,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kangrio.byd.assistant.ui.theme.AssistantTheme
 import com.kangrio.byd.assistant.util.PermissionUtil
 import kotlinx.coroutines.delay
@@ -100,8 +105,13 @@ data class Processing(
 fun Home(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     var processing by remember { mutableStateOf(Processing(false, "")) }
+
+    var isGoogleAppInstalled by remember {
+        mutableStateOf(PermissionUtil.isGoogleAppInstalled(context))
+    }
 
     var isGranted by remember {
         mutableStateOf(
@@ -120,6 +130,26 @@ fun Home(modifier: Modifier = Modifier) {
                 false
             }
         )
+    }
+
+    // Refresh states automatically when coming back to the screen
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isGoogleAppInstalled = PermissionUtil.isGoogleAppInstalled(context)
+                isGranted = PermissionUtil.isGranted(
+                    context,
+                    Manifest.permission.WRITE_SECURE_SETTINGS
+                )
+                if (isGranted) {
+                    isEnabledVoiceAssistant = PermissionUtil.isEnableVoiceAssistant(context)
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     Surface(
@@ -158,14 +188,32 @@ fun Home(modifier: Modifier = Modifier) {
                     modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
                 )
 
-                // Step 1: System Permission
+                // Step 1: Google App Check
                 StepCard(
                     stepNumber = 1,
+                    icon = Icons.Default.Android,
+                    title = "Google App Installation",
+                    statusText = if (isGoogleAppInstalled) "App Installed" else "App Missing",
+                    isCompleted = isGoogleAppInstalled,
+                    isActive = !isGoogleAppInstalled,
+                    description = "Verifies if the Google App is installed on this device to handle voice command intents.",
+                    detailText = "Package Name:\ncom.google.android.googlequicksearchbox\n\nStatus:\n${if (isGoogleAppInstalled) "Installed and ready" else "Not installed. Install via Store below."}",
+                    buttonText = if (isGoogleAppInstalled) "Installed" else "Install Google App",
+                    onButtonClick = {
+                        PermissionUtil.openGoogleAppInStore(context)
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Step 2: System Permission
+                StepCard(
+                    stepNumber = 2,
                     icon = Icons.Default.Key,
                     title = "Grant Write Secure Settings Permission",
-                    statusText = if (isGranted) "Permission Granted" else "Action Required",
+                    statusText = if (isGranted) "Permission Granted" else if (isGoogleAppInstalled) "Action Required" else "Blocked by Step 1",
                     isCompleted = isGranted,
-                    isActive = !isGranted,
+                    isActive = isGoogleAppInstalled && !isGranted,
                     description = "Required to write system-level assistant configuration keys into Android Secure Settings.",
                     detailText = "Permission Required:\nandroid.permission.WRITE_SECURE_SETTINGS\n\nAutomatic Method:\nUses dadb to connect locally on device over ADB socket and execute pm grant.",
                     manualAdbCommand = "adb shell pm grant ${context.packageName} ${Manifest.permission.WRITE_SECURE_SETTINGS}",
@@ -192,12 +240,12 @@ fun Home(modifier: Modifier = Modifier) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step 2: Enable Voice Assistant
+                // Step 3: Enable Voice Assistant
                 StepCard(
-                    stepNumber = 2,
+                    stepNumber = 3,
                     icon = Icons.Default.Settings,
                     title = "Configure Voice Assistant Service",
-                    statusText = if (isEnabledVoiceAssistant) "Service Enabled" else if (isGranted) "Ready to Enable" else "Blocked by Step 1",
+                    statusText = if (isEnabledVoiceAssistant) "Service Enabled" else if (isGranted) "Ready to Enable" else "Blocked by Step 2",
                     isCompleted = isEnabledVoiceAssistant,
                     isActive = isGranted && !isEnabledVoiceAssistant,
                     description = "Configures Google Assistant (GsaVoiceInteractionService) as your active default voice interaction service.",
@@ -219,12 +267,12 @@ fun Home(modifier: Modifier = Modifier) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step 3: Test Shortcut
+                // Step 4: Test Shortcut
                 StepCard(
-                    stepNumber = 3,
+                    stepNumber = 4,
                     icon = Icons.Default.PlayArrow,
                     title = "Test Voice Assistant Launcher",
-                    statusText = if (isEnabledVoiceAssistant) "Ready to Test" else "Blocked by Step 2",
+                    statusText = if (isEnabledVoiceAssistant) "Ready to Test" else "Blocked by Step 3",
                     isCompleted = false,
                     isActive = isEnabledVoiceAssistant,
                     description = "Launches the voice command intent to verify Google Assistant opens properly.",
@@ -458,6 +506,7 @@ fun StepCard(
                             fontFamily = FontFamily.Monospace,
                             color = MaterialTheme.colorScheme.onErrorContainer
                         )
+                        Spacer(modifier = Modifier.height(8.dp))
                         OutlinedButton(
                             onClick = {
                                 val clipboard =
@@ -477,7 +526,7 @@ fun StepCard(
                                 modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Copy")
+                            Text(text = "Copy Command")
                         }
                     }
                 }

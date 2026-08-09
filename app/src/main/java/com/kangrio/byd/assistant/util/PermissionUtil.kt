@@ -70,4 +70,33 @@ object PermissionUtil {
             System.setProperty("user.home", userDir)
         }
     }
+
+    fun isGoogleAppInstalled(context: Context): Boolean {
+        val packageName = "com.google.android.googlequicksearchbox"
+        return try {
+            context.packageManager.getPackageInfo(packageName, 0)
+            true
+        } catch (e: PackageManager.NameNotFoundException) {
+            false
+        }
+    }
+
+    fun openGoogleAppInStore(context: Context) {
+        val packageName = "com.google.android.googlequicksearchbox"
+        try {
+            val intent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("market://details?id=$packageName")
+            )
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        } catch (e: Throwable) {
+            val intent = android.content.Intent(
+                android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+            )
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+        }
+    }
 }
