@@ -6,7 +6,11 @@ import android.provider.Settings
 import android.util.Log
 import dadb.Dadb
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.Duration.Companion.milliseconds
 
 object PermissionUtil {
     fun isGranted(context: Context, permission: String): Boolean {
@@ -43,11 +47,20 @@ object PermissionUtil {
     suspend fun adbRequestPermission(context: Context, permission: String) =
         withContext(Dispatchers.IO) {
             setupUserHome(context)
-            val dAdb = Dadb.discover() ?: run {
-                Log.e("PermissionUtil", "No device found")
-                return@withContext
+            withTimeoutOrNull(10_000L.milliseconds) {
+                val dAdb = Dadb.discover(connectTimeout = 5000, socketTimeout = 5000) ?: run {
+                    Log.e("PermissionUtil", "No device found")
+                    return@withTimeoutOrNull null
+                }
+                while (isActive) {
+                    try {
+                        dAdb.shell("pm grant ${context.packageName} $permission")
+                        return@withTimeoutOrNull null
+                    } catch (e: Throwable) {
+                        delay(100L.milliseconds)
+                    }
+                }
             }
-            dAdb.shell("pm grant ${context.packageName} $permission")
         }
 
     private fun setupUserHome(context: Context) {
