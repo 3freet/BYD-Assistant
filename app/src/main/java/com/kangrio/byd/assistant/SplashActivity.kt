@@ -1,10 +1,8 @@
 package com.kangrio.byd.assistant
 
 import android.Manifest
-import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import com.kangrio.byd.assistant.util.PermissionUtil

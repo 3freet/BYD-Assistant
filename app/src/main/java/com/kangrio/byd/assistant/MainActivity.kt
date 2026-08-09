@@ -3,12 +3,11 @@ package com.kangrio.byd.assistant
 import android.Manifest
 import android.content.Intent
 import android.os.Bundle
-import android.provider.Settings
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +26,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +35,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
@@ -140,9 +141,27 @@ fun Home(modifier: Modifier = Modifier) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable(enabled = true) {
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Permission",
+                        )
+                        TextButton(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp)
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    shape = RoundedCornerShape(16.dp)
+                                ),
+                            onClick = {
                                 scope.launch {
-                                    processing = Processing(true, "Granting permission...\n${Manifest.permission.WRITE_SECURE_SETTINGS}")
+                                    processing = Processing(
+                                        true,
+                                        "Granting permission...\n${Manifest.permission.WRITE_SECURE_SETTINGS}"
+                                    )
                                     PermissionUtil.adbRequestPermission(
                                         context,
                                         Manifest.permission.WRITE_SECURE_SETTINGS
@@ -155,16 +174,11 @@ fun Home(modifier: Modifier = Modifier) {
                                     )
                                 }
                             }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Permission",
-                        )
-                        Text(
-                            text = "Click to grant",
-                        )
+                        ) {
+                            Text(
+                                text = "Next",
+                            )
+                        }
                     }
                 }
 
@@ -175,7 +189,22 @@ fun Home(modifier: Modifier = Modifier) {
                 ) {
                     Row(
                         modifier = Modifier
-                            .clickable(enabled = true) {
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "Enable voice assistant",
+                        )
+                        TextButton(
+                            modifier = Modifier
+                                .padding(horizontal = 16.dp)
+                                .border(
+                                    width = 1.dp,
+                                    color = MaterialTheme.colorScheme.outline,
+                                    shape = RoundedCornerShape(16.dp)
+                                ),
+                            onClick = {
                                 scope.launch {
                                     processing = Processing(true, "Enabling voice assistant...")
                                     PermissionUtil.enableVoiceAssistant(context)
@@ -184,33 +213,33 @@ fun Home(modifier: Modifier = Modifier) {
                                     processing = Processing(false, "")
                                 }
                             }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Enable voice assistant",
-                        )
-                        Text(
-                            text = "Click to enable",
-                        )
+                        ) {
+                            Text(
+                                text = "Next",
+                            )
+                        }
                     }
                 }
 
-                OutlinedRow(
+                Row(
                     modifier = Modifier
-                        .padding(top = 16.dp),
-                    enabled = isEnabledVoiceAssistant
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .alpha(if (isEnabledVoiceAssistant) 1f else 0f),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Row(
+                    TextButton(
                         modifier = Modifier
-                            .clickable(enabled = true) {
-                                val intent = Intent(Intent.ACTION_VOICE_COMMAND)
-                                context.startActivity(intent)
-                            }
-                            .padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 16.dp)
+                            .border(
+                                width = 1.dp,
+                                color = MaterialTheme.colorScheme.outline,
+                                shape = RoundedCornerShape(16.dp)
+                            ),
+                        onClick = {
+                            val intent = Intent(Intent.ACTION_VOICE_COMMAND)
+                            context.startActivity(intent)
+                        }
                     ) {
                         Text(
                             text = "Test",
