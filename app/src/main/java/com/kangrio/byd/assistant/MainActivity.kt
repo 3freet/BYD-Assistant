@@ -2,7 +2,6 @@ package com.kangrio.byd.assistant
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -83,7 +82,8 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         if (Utils.isGranted(this, Manifest.permission.WRITE_SECURE_SETTINGS) &&
-            Utils.isEnableVoiceAssistant(this)) {
+            Utils.isEnableVoiceAssistant(this)
+        ) {
             finishAffinity()
         }
     }
@@ -278,8 +278,7 @@ fun Home(modifier: Modifier = Modifier) {
                     detailText = "Intent Action:\nandroid.intent.action.VOICE_COMMAND\n\nBehavior:\nLaunching this application in the future will automatically trigger Google Assistant.",
                     buttonText = "Launch Test",
                     onButtonClick = {
-                        val intent = Intent(Intent.ACTION_VOICE_COMMAND)
-                        context.startActivity(intent)
+                        Utils.startVoiceAssistant(context)
                     }
                 )
             }

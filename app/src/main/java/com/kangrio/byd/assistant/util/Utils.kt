@@ -1,9 +1,11 @@
 package com.kangrio.byd.assistant.util
 
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.provider.Settings
 import android.util.Log
+import android.widget.Toast
 import dadb.Dadb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -38,6 +40,16 @@ object Utils {
 
         return assistant == componentName
                 && voiceInteractionService == componentName
+    }
+
+    fun startVoiceAssistant(context: Context) {
+        try {
+            val intent = Intent(Intent.ACTION_VOICE_COMMAND)
+            intent.setPackage("com.google.android.googlequicksearchbox")
+            context.startActivity(intent)
+        } catch (e: Throwable) {
+            Toast.makeText(context, "${e.message}", Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun putSecureSetting(context: Context, key: String, value: String?) {
