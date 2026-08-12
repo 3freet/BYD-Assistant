@@ -1,8 +1,10 @@
 package com.kangrio.byd.assistant.util
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -13,6 +15,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.core.content.edit
 
 object Utils {
     fun isGranted(context: Context, permission: String): Boolean {
@@ -40,6 +43,14 @@ object Utils {
 
         return assistant == componentName
                 && voiceInteractionService == componentName
+    }
+
+    fun setupCompleted(context: Context): Boolean {
+        val isGranted = isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
+        val isEnableVoiceAssistant = isEnableVoiceAssistant(context)
+        val isGoogleAppInstalled = isGoogleAppInstalled(context)
+        val isAutoStart = isGrantedAutoStart(context)
+        return isGranted && isEnableVoiceAssistant && isGoogleAppInstalled && isAutoStart
     }
 
     fun startVoiceAssistant(context: Context) {
@@ -96,19 +107,49 @@ object Utils {
     fun openGoogleAppInStore(context: Context) {
         val packageName = "com.google.android.googlequicksearchbox"
         try {
-            val intent = android.content.Intent(
-                android.content.Intent.ACTION_VIEW,
+            val intent = Intent(
+                Intent.ACTION_VIEW,
                 android.net.Uri.parse("market://details?id=$packageName")
             )
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
         } catch (e: Throwable) {
-            val intent = android.content.Intent(
-                android.content.Intent.ACTION_VIEW,
+            val intent = Intent(
+                Intent.ACTION_VIEW,
                 android.net.Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
             )
-            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
+        }
+    }
+
+    fun isDilink(): Boolean {
+        return Build.FINGERPRINT.contains("dilink", true)
+    }
+
+    // use last update time instead
+    fun isGrantedAutoStart(context: Context): Boolean {
+        if (!isDilink()) return true
+
+        val prefs = context.getSharedPreferences(context.packageName, Context.MODE_PRIVATE)
+        val currentUpdateTime = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
+        val lastUpdateTime = prefs.getLong("last_update_time", 0)
+        return lastUpdateTime > currentUpdateTime
+    }
+
+    fun openAutoStartSettings(context: Context) = runCatching {
+        val intent = Intent("android.intent.action.BYD_APPSTARTMANAGEMENT")
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        context.startActivity(intent)
+    }
+
+    fun markAutoStartTime(context: Context) {
+        val prefs = context.getSharedPreferences(context.packageName, Context.MODE_PRIVATE)
+        prefs.edit {
+            putLong(
+                "last_update_time",
+                System.currentTimeMillis()
+            )
         }
     }
 }

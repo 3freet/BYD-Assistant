@@ -2,6 +2,7 @@ package com.kangrio.byd.assistant
 
 import android.Manifest
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -31,6 +32,7 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RestartAlt
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -82,7 +84,7 @@ class MainActivity : ComponentActivity() {
     override fun onPause() {
         super.onPause()
         if (Utils.isGranted(this, Manifest.permission.WRITE_SECURE_SETTINGS) &&
-            Utils.isEnableVoiceAssistant(this)
+            Utils.setupCompleted(this)
         ) {
             finishAffinity()
         }
@@ -131,6 +133,14 @@ fun Home(modifier: Modifier = Modifier) {
         )
     }
 
+    val isDilink = remember { Utils.isDilink() }
+
+    var isAutoStart by remember {
+        mutableStateOf(
+            Utils.isGrantedAutoStart(context)
+        )
+    }
+
     // Refresh states automatically when coming back to the screen
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
@@ -143,6 +153,7 @@ fun Home(modifier: Modifier = Modifier) {
                 if (isGranted) {
                     isEnabledVoiceAssistant = Utils.isEnableVoiceAssistant(context)
                 }
+                isAutoStart = Utils.isGrantedAutoStart(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -267,8 +278,29 @@ fun Home(modifier: Modifier = Modifier) {
                 Spacer(modifier = Modifier.height(16.dp))
 
                 // Step 4: Test Shortcut
+                if (isDilink) {
+                    StepCard(
+                        stepNumber = 4,
+                        icon = Icons.Default.RestartAlt,
+                        title = "Auto Start",
+                        statusText = "Check is allowed auto start",
+                        isCompleted = isAutoStart,
+                        isActive = !isAutoStart,
+                        description = "Allow auto start when device is rebooted.",
+                        detailText = "Google Assistant needs to be re-enabled after every reboot.",
+                        buttonText = "Allow",
+                        onButtonClick = {
+                            Utils.markAutoStartTime(context)
+                            Utils.openAutoStartSettings(context)
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Step 5: Test Shortcut
                 StepCard(
-                    stepNumber = 4,
+                    stepNumber = if (isDilink) 5 else 4,
                     icon = Icons.Default.PlayArrow,
                     title = "Test Voice Assistant Launcher",
                     statusText = if (isEnabledVoiceAssistant) "Ready to Test" else "Blocked by Step 3",

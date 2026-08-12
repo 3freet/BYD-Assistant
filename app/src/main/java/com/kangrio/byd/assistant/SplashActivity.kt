@@ -9,10 +9,7 @@ import com.kangrio.byd.assistant.util.Utils
 class StartActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val isGranted = Utils.isGranted(this, Manifest.permission.WRITE_SECURE_SETTINGS)
-        val isEnableVoiceAssistant = Utils.isEnableVoiceAssistant(this)
-        val isGoogleAppInstalled = Utils.isGoogleAppInstalled(this)
-        if (isGranted && isEnableVoiceAssistant && isGoogleAppInstalled) {
+        if (Utils.setupCompleted(this)) {
             Utils.startVoiceAssistant(this)
         } else {
             startActivity(Intent(this, MainActivity::class.java))
