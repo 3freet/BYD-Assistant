@@ -1,10 +1,12 @@
 package com.kangrio.byd.assistant.util
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
@@ -16,6 +18,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
 import androidx.core.content.edit
+import androidx.core.net.toUri
 
 object Utils {
     fun isGranted(context: Context, permission: String): Boolean {
@@ -129,7 +132,10 @@ object Utils {
 
     // use last update time instead
     fun isGrantedAutoStart(context: Context): Boolean {
-        if (!isDilink()) return true
+        if (!isDilink()) {
+            val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+            return power.isIgnoringBatteryOptimizations(context.packageName)
+        }
 
         val prefs = context.getSharedPreferences(context.packageName, Context.MODE_PRIVATE)
         val currentUpdateTime = context.packageManager.getPackageInfo(context.packageName, 0).lastUpdateTime
@@ -137,7 +143,16 @@ object Utils {
         return lastUpdateTime > currentUpdateTime
     }
 
+    @SuppressLint("BatteryLife")
     fun openAutoStartSettings(context: Context) = runCatching {
+        if (!isDilink()) {
+            val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                data = "package:${context.packageName}".toUri()
+            }
+            context.startActivity(intent)
+            return@runCatching
+        }
+
         val intent = Intent("android.intent.action.BYD_APPSTARTMANAGEMENT")
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
         context.startActivity(intent)

@@ -133,8 +133,6 @@ fun Home(modifier: Modifier = Modifier) {
         )
     }
 
-    val isDilink = remember { Utils.isDilink() }
-
     var isAutoStart by remember {
         mutableStateOf(
             Utils.isGrantedAutoStart(context)
@@ -198,9 +196,28 @@ fun Home(modifier: Modifier = Modifier) {
                     modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
                 )
 
-                // Step 1: Google App Check
+                // Step 1: Auto Start Check
                 StepCard(
                     stepNumber = 1,
+                    icon = Icons.Default.RestartAlt,
+                    title = "Auto Start",
+                    statusText = "Check is allowed auto start",
+                    isCompleted = isAutoStart,
+                    isActive = !isAutoStart,
+                    description = "Allow auto start when device is rebooted.",
+                    detailText = "Google Assistant needs to be re-enabled after every reboot.",
+                    buttonText = "Allow",
+                    onButtonClick = {
+                        Utils.markAutoStartTime(context)
+                        Utils.openAutoStartSettings(context)
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Step 2: Google App Check
+                StepCard(
+                    stepNumber = 2,
                     icon = Icons.Default.Android,
                     title = "Google App Installation",
                     statusText = if (isGoogleAppInstalled) "App Installed" else "App Missing",
@@ -216,9 +233,9 @@ fun Home(modifier: Modifier = Modifier) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step 2: System Permission
+                // Step 3: System Permission
                 StepCard(
-                    stepNumber = 2,
+                    stepNumber = 3,
                     icon = Icons.Default.Key,
                     title = "Grant Write Secure Settings Permission",
                     statusText = if (isGranted) "Permission Granted" else if (isGoogleAppInstalled) "Action Required" else "Blocked by Step 1",
@@ -250,9 +267,9 @@ fun Home(modifier: Modifier = Modifier) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step 3: Enable Voice Assistant
+                // Step 4: Enable Voice Assistant
                 StepCard(
-                    stepNumber = 3,
+                    stepNumber = 4,
                     icon = Icons.Default.Settings,
                     title = "Configure Voice Assistant Service",
                     statusText = if (isEnabledVoiceAssistant) "Service Enabled" else if (isGranted) "Ready to Enable" else "Blocked by Step 2",
@@ -277,33 +294,12 @@ fun Home(modifier: Modifier = Modifier) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step 4: Test Shortcut
-                if (isDilink) {
-                    StepCard(
-                        stepNumber = 4,
-                        icon = Icons.Default.RestartAlt,
-                        title = "Auto Start",
-                        statusText = "Check is allowed auto start",
-                        isCompleted = isAutoStart,
-                        isActive = !isAutoStart,
-                        description = "Allow auto start when device is rebooted.",
-                        detailText = "Google Assistant needs to be re-enabled after every reboot.",
-                        buttonText = "Allow",
-                        onButtonClick = {
-                            Utils.markAutoStartTime(context)
-                            Utils.openAutoStartSettings(context)
-                        }
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(16.dp))
-
                 // Step 5: Test Shortcut
                 StepCard(
-                    stepNumber = if (isDilink) 5 else 4,
+                    stepNumber = 5,
                     icon = Icons.Default.PlayArrow,
                     title = "Test Voice Assistant Launcher",
-                    statusText = if (isEnabledVoiceAssistant) "Ready to Test" else "Blocked by Step 3",
+                    statusText = if (isEnabledVoiceAssistant) "Ready to Test" else "Blocked by Step 4",
                     isCompleted = false,
                     isActive = isEnabledVoiceAssistant,
                     description = "Launches the voice command intent to verify Google Assistant opens properly.",
