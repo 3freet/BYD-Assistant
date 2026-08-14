@@ -5,11 +5,11 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.SoundPool
 import android.os.Build
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
-import android.widget.Toast
 import dadb.Dadb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -19,8 +19,15 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
 import androidx.core.content.edit
 import androidx.core.net.toUri
+import com.kangrio.byd.assistant.R
 
 object Utils {
+    private val soundPool = SoundPool.Builder()
+        .setMaxStreams(1)
+        .build()
+
+    private var dingSound: Int = -1
+
     fun isGranted(context: Context, permission: String): Boolean {
         return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
     }
@@ -49,20 +56,32 @@ object Utils {
     }
 
     fun setupCompleted(context: Context): Boolean {
-        val isGranted = isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
+        val isGrantedWriteSecureSettings = isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
+        val isGrantedVoicePermission = isGranted(context, Manifest.permission.RECORD_AUDIO)
         val isEnableVoiceAssistant = isEnableVoiceAssistant(context)
         val isGoogleAppInstalled = isGoogleAppInstalled(context)
         val isAutoStart = isGrantedAutoStart(context)
-        return isGranted && isEnableVoiceAssistant && isGoogleAppInstalled && isAutoStart
+        return isGrantedWriteSecureSettings && isGrantedVoicePermission && isEnableVoiceAssistant && isGoogleAppInstalled && isAutoStart
     }
 
     fun startVoiceAssistant(context: Context) {
         try {
-            val intent = Intent(Intent.ACTION_VOICE_COMMAND)
-            intent.setPackage("com.google.android.googlequicksearchbox")
+            if (dingSound == -1) {
+                dingSound = soundPool.load(context, R.raw.ding, 1)
+                soundPool.setOnLoadCompleteListener { pool, i, i1 ->
+                    soundPool.play(dingSound, 1f, 1f, 0, 0, 1f)
+                }
+            } else {
+                soundPool.play(dingSound, 1f, 1f, 0, 0, 1f)
+            }
+            val intent = Intent(Intent.ACTION_VOICE_COMMAND).apply {
+                setPackage("com.google.android.googlequicksearchbox")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+
             context.startActivity(intent)
         } catch (e: Throwable) {
-            Toast.makeText(context, "${e.message}", Toast.LENGTH_LONG).show()
+            Log.e("Utils", "startVoiceAssistant", e)
         }
     }
 

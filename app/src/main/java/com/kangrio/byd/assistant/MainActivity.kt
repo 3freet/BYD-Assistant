@@ -65,6 +65,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.kangrio.byd.assistant.service.VoiceWakeService
 import com.kangrio.byd.assistant.ui.theme.AssistantTheme
 import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.delay
@@ -152,6 +153,7 @@ fun Home(modifier: Modifier = Modifier) {
                     isEnabledVoiceAssistant = Utils.isEnableVoiceAssistant(context)
                 }
                 isAutoStart = Utils.isGrantedAutoStart(context)
+                VoiceWakeService.startService(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
