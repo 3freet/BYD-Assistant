@@ -321,7 +321,10 @@ fun SettingsScreen(
                     .weight(1f)
                     .border(1.dp, outline, RoundedCornerShape(20.dp)),
             ) {
-                SettingRow(label = "Voice Detection") {
+                SettingRow(
+                    label = "Voice Detection",
+                    description = "Enable or disable wake-word detection."
+                ) {
                     Switch(
                         checked = isStateOn,
                         onCheckedChange = {
@@ -335,7 +338,8 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
-                    label = "Play Sound"
+                    label = "Play Sound",
+                    description = "Play a sound when voice detection starts."
                 ) {
                     Switch(
                         checked = isPlayDing,
@@ -351,7 +355,8 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
-                    label = "Detection Sensitivity"
+                    label = "Detection Sensitivity",
+                    description = "Adjust how easily the wake word is detected."
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -379,7 +384,8 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
-                    label = "Microphone Gain"
+                    label = "Microphone Gain",
+                    description = "Adjust the microphone input volume."
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -410,7 +416,7 @@ fun SettingsScreen(
 
                 SettingRow(
                     label = "Train Wake Word Model",
-                    description = "Train your voice model to recognize \"Hey Rio\" by recording at least 3 samples."
+                    description = "Record your voice samples to improve recognition of \"Hey Rio\" by recording at least 3 samples."
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -554,7 +560,7 @@ private fun SettingRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(if (description.isNotEmpty()) 72.dp else 56.dp)
+            .height(if (description.isNotEmpty()) 64.dp else 56.dp)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
