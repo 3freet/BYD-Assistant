@@ -51,7 +51,7 @@ class SnowboyDetector(
 
         detector = SnowboyDetect(
             assetFile("snowboy/common.res"),
-            modelFile.ifEmpty { assetFile("snowboy/hey_rio.pmdl") }
+            modelFile.ifEmpty { assetFile("snowboy/default_hey_rio.pmdl") }
         ).apply {
             SetSensitivity(sensitivity.toString())
             SetAudioGain(audioGain)
@@ -151,7 +151,9 @@ class SnowboyDetector(
         val file = File(
             context.filesDir,
             path
-        )
+        ).apply {
+            parentFile?.mkdirs()
+        }
 
         if (!file.exists()) {
             context.assets.open(path).use { input ->

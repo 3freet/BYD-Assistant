@@ -29,7 +29,7 @@ class VoiceWakeService : Service() {
     private var detector: SnowboyDetector? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val handler = Handler(Looper.getMainLooper())
-    private val toast by lazy { Toast.makeText(this, "", Toast.LENGTH_SHORT) }
+    lateinit var toast: Toast
 
     override fun onCreate() {
         super.onCreate()
@@ -56,8 +56,7 @@ class VoiceWakeService : Service() {
 
             SET_MODEL -> {
                 val filePath = intent.extras?.getString("pmdlFile") ?: return START_STICKY
-                val pmdlFile = File(filePath)
-                setModel(pmdlFile)
+                setModel(filePath)
             }
 
             SET_SENSITIVITY -> {
@@ -75,8 +74,13 @@ class VoiceWakeService : Service() {
     }
 
     fun showToast(message: String) {
-        toast.setText(message)
-        toast.show()
+        handler.post {
+            if (::toast.isInitialized) {
+                toast.cancel()
+            }
+            toast = Toast.makeText(this, message, Toast.LENGTH_SHORT)
+            toast.show()
+        }
     }
 
     fun setSensitivity(sensitivity: Float) {
@@ -95,28 +99,18 @@ class VoiceWakeService : Service() {
         }
     }
 
-    fun setModel(pmdlFile: File) {
+    fun setModel(pmdlFilePath: String) {
         stopHotwordDetection()
+        Preferences.hotwordModelPath = pmdlFilePath
         scope.launch {
-            startHotwordDetection(pmdlFile.absolutePath)
+            startHotwordDetection()
         }
     }
 
-    suspend fun startHotwordDetection(modelPath: String = "") = withContext(Dispatchers.IO) {
+    suspend fun startHotwordDetection() = withContext(Dispatchers.IO) {
         if (!Utils.setupCompleted(this@VoiceWakeService) || !Preferences.startHotword) return@withContext
-        val modelPath = modelPath.ifEmpty {
-            File(filesDir, "snowboy/hey_rio.pmdl").let {
-                it.parentFile?.mkdirs()
-                if (it.exists()) {
-                    it.absolutePath
-                } else {
-                    ""
-                }
-            }
-        }
 
-
-
+        val modelPath = Preferences.hotwordModelPath
         detector = SnowboyDetector(
             context = this@VoiceWakeService,
             modelFile = modelPath,
@@ -127,17 +121,13 @@ class VoiceWakeService : Service() {
         }
 
         detector?.start()
-        handler.post {
-            showToast("""Hotword Detection Started Say: "Hey Rio" """)
-        }
+        showToast("""Hotword Detection Started Say: "Hey Rio" """)
     }
 
     fun stopHotwordDetection() {
         detector?.stop()
         detector = null
-        handler.post {
-            showToast("""Hotword Detection Stopped""")
-        }
+        showToast("""Hotword Detection Stopped""")
     }
 
     private fun onHeyRioDetected() {
@@ -234,10 +224,10 @@ class VoiceWakeService : Service() {
             context.startService(intent)
         }
 
-        fun setModel(context: Context, pmdlFile: File) {
+        fun setModel(context: Context, pmdlFilePath: String) {
             val intent = Intent(context, VoiceWakeService::class.java).apply {
                 action = SET_MODEL
-                putExtra("pmdlFile", pmdlFile.absolutePath)
+                putExtra("pmdlFile", pmdlFilePath)
             }
             context.startService(intent)
         }

@@ -61,7 +61,7 @@ import com.kangrio.byd.assistant.util.SnowboyTrainClient
 import kotlinx.coroutines.launch
 import java.io.File
 
-private const val WAKE_WORD_MODEL_NAME = "hey_rio"
+private const val WAKE_WORD_MODEL_NAME = "user_hey_rio"
 private const val SEASALT_BASE_URL = "https://snowboy.jolanrensen.nl" // snowboy-seasalt host
 private const val MIN_SAMPLES = 3
 
@@ -190,6 +190,7 @@ class SettingsActivity : ComponentActivity() {
                         recordPhase = phase,
                         sampleCount = currentSamples.size,
                         onTrainClick = { onTrainClick() },
+                        onDefaultClick = { VoiceWakeService.setModel(this, "") },
                         onStartRecordClick = { onStartOrStopRecord(phase) },
                         onSubmitClick = { submitSamples(currentSamples) },
                         onNewClick = { resetPanel() },
@@ -256,7 +257,7 @@ class SettingsActivity : ComponentActivity() {
                 outputDir = filesDir.resolve("snowboy")
             )) {
                 is SnowboyTrainClient.TrainResult.Success -> {
-                    VoiceWakeService.setModel(this@SettingsActivity, result.pmdlFile)
+                    VoiceWakeService.setModel(this@SettingsActivity, result.pmdlFile.absolutePath)
                     recordPhase.value = RecordPhase.Trained(result.pmdlFile)
                     Toast.makeText(this@SettingsActivity, "Wake word trained", Toast.LENGTH_SHORT).show()
                 }
@@ -294,6 +295,7 @@ fun SettingsScreen(
     recordPhase: RecordPhase = RecordPhase.Idle,
     sampleCount: Int = 0,
     onTrainClick: () -> Unit,
+    onDefaultClick: () -> Unit = {},
     onStartRecordClick: () -> Unit = {},
     onSubmitClick: () -> Unit = {},
     onNewClick: () -> Unit = {},
@@ -437,11 +439,7 @@ fun SettingsScreen(
                             Text("Train")
                         }
                         FilledTonalButton(
-                            onClick = {
-                                context.filesDir.resolve("snowboy").deleteRecursively()
-                                VoiceWakeService.setState(context, false)
-                                VoiceWakeService.setState(context, true)
-                            }
+                            onClick = onDefaultClick
                         ) {
                             Text("Default")
                         }
