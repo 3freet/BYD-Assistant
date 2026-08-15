@@ -137,14 +137,14 @@ object Utils {
         try {
             val intent = Intent(
                 Intent.ACTION_VIEW,
-                android.net.Uri.parse("market://details?id=$packageName")
+                "market://details?id=$packageName".toUri()
             )
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
         } catch (e: Throwable) {
             val intent = Intent(
                 Intent.ACTION_VIEW,
-                android.net.Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+                "https://play.google.com/store/apps/details?id=$packageName".toUri()
             )
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
