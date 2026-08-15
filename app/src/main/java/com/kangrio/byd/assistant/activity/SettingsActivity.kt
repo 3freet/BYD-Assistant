@@ -207,6 +207,9 @@ class SettingsActivity : ComponentActivity() {
 
     private fun onTrainClick() {
         showTrainPanel.value = !showTrainPanel.value
+        if (showTrainPanel.value && Preferences.startHotword) {
+            Toast.makeText(this, "Recomment to disable voice detection before training", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun onStartOrStopRecord(phase: RecordPhase) {
@@ -437,7 +440,7 @@ fun SettingsScreen(
                                 VoiceWakeService.setState(context, true)
                             }
                         ) {
-                            Text("Reset")
+                            Text("Default")
                         }
                     }
                 }
@@ -529,9 +532,9 @@ private fun RecordPanel(
 
 private fun statusText(phase: RecordPhase, sampleCount: Int): String = when (phase) {
     RecordPhase.Idle -> "$sampleCount / $MIN_SAMPLES samples recorded"
-    RecordPhase.Recording -> "Recording… tap Stop when done"
-    RecordPhase.Uploading -> "Uploading and training…"
-    is RecordPhase.Trained -> "Model trained — tap Save to keep it, or New to record again"
+    RecordPhase.Recording -> "Recording... tap Stop when done"
+    RecordPhase.Uploading -> "Uploading and training..."
+    is RecordPhase.Trained -> "Model trained — tap New to record again"
     is RecordPhase.Failure -> "Failed: ${phase.message}"
 }
 
