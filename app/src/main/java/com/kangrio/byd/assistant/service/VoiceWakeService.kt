@@ -29,6 +29,7 @@ class VoiceWakeService : Service() {
     private var detector: SnowboyDetector? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val handler = Handler(Looper.getMainLooper())
+    private val toast by lazy { Toast.makeText(this, "", Toast.LENGTH_SHORT) }
 
     override fun onCreate() {
         super.onCreate()
@@ -71,6 +72,11 @@ class VoiceWakeService : Service() {
         }
 
         return START_STICKY
+    }
+
+    fun showToast(message: String) {
+        toast.setText(message)
+        toast.show()
     }
 
     fun setSensitivity(sensitivity: Float) {
@@ -122,7 +128,7 @@ class VoiceWakeService : Service() {
 
         detector?.start()
         handler.post {
-            Toast.makeText(this@VoiceWakeService, """Hotword Detection Started Say: "Hey Rio" """, Toast.LENGTH_SHORT).show()
+            showToast("""Hotword Detection Started Say: "Hey Rio" """)
         }
     }
 
@@ -130,7 +136,7 @@ class VoiceWakeService : Service() {
         detector?.stop()
         detector = null
         handler.post {
-            Toast.makeText(this@VoiceWakeService, """Hotword Detection Stopped""", Toast.LENGTH_SHORT).show()
+            showToast("""Hotword Detection Stopped""")
         }
     }
 
