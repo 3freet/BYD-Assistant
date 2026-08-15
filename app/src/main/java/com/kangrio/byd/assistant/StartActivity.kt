@@ -40,7 +40,9 @@ class StartActivity : Activity() {
                 Intent(
                     Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                     "package:$packageName".toUri()
-                )
+                ).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
             )
             return
         }

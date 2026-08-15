@@ -2,7 +2,6 @@ package com.kangrio.byd.assistant
 
 import android.Manifest
 import android.content.Context
-import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -46,7 +45,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,14 +61,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kangrio.byd.assistant.service.VoiceWakeService
 import com.kangrio.byd.assistant.ui.theme.AssistantTheme
 import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,9 +82,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onPause() {
         super.onPause()
-        if (Utils.isGranted(this, Manifest.permission.WRITE_SECURE_SETTINGS) &&
-            Utils.setupCompleted(this)
-        ) {
+        if (Utils.setupCompleted(this)) {
             finishAffinity()
         }
     }
@@ -119,7 +115,7 @@ fun Home(modifier: Modifier = Modifier) {
         mutableStateOf(Utils.isGoogleAppInstalled(context))
     }
 
-    var isGranted by remember {
+    var isGrantedWriteSecureSettings by remember {
         mutableStateOf(
             Utils.isGranted(
                 context,
@@ -140,25 +136,17 @@ fun Home(modifier: Modifier = Modifier) {
         )
     }
 
-    // Refresh states automatically when coming back to the screen
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                isGoogleAppInstalled = Utils.isGoogleAppInstalled(context)
-                isGranted = Utils.isGranted(
-                    context,
-                    Manifest.permission.WRITE_SECURE_SETTINGS
-                )
-                if (isGranted) {
-                    isEnabledVoiceAssistant = Utils.isEnableVoiceAssistant(context)
-                }
-                isAutoStart = Utils.isGrantedAutoStart(context)
+    // check every 1 second
+    LaunchedEffect(lifecycleOwner) {
+        while (true) {
+            isAutoStart = Utils.isGrantedAutoStart(context)
+            isGoogleAppInstalled = Utils.isGoogleAppInstalled(context)
+            isGrantedWriteSecureSettings = Utils.isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
+            isEnabledVoiceAssistant = Utils.isEnableVoiceAssistant(context)
+            if (listOf(isAutoStart, isGoogleAppInstalled, isGrantedWriteSecureSettings, isEnabledVoiceAssistant).all { it }) {
                 VoiceWakeService.startService(context)
             }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
+            delay(1_000L.milliseconds)
         }
     }
 
@@ -240,13 +228,13 @@ fun Home(modifier: Modifier = Modifier) {
                     stepNumber = 3,
                     icon = Icons.Default.Key,
                     title = "Grant Write Secure Settings Permission",
-                    statusText = if (isGranted) "Permission Granted" else if (isGoogleAppInstalled) "Action Required" else "Blocked by Step 1",
-                    isCompleted = isGranted,
-                    isActive = isGoogleAppInstalled && !isGranted,
+                    statusText = if (isGrantedWriteSecureSettings) "Permission Granted" else if (isGoogleAppInstalled) "Action Required" else "Blocked by Step 1",
+                    isCompleted = isGrantedWriteSecureSettings,
+                    isActive = isGoogleAppInstalled && !isGrantedWriteSecureSettings,
                     description = "Required to write system-level assistant configuration keys into Android Secure Settings.",
                     detailText = "Permission Required:\nandroid.permission.WRITE_SECURE_SETTINGS\n\nAutomatic Method:\nUses dadb to connect locally on device over ADB socket and execute pm grant.",
                     manualAdbCommand = "adb shell pm grant ${context.packageName} ${Manifest.permission.WRITE_SECURE_SETTINGS}",
-                    buttonText = if (isGranted) "Granted" else "Grant via ADB",
+                    buttonText = if (isGrantedWriteSecureSettings) "Granted" else "Grant via ADB",
                     onButtonClick = {
                         scope.launch {
                             processing = Processing(
@@ -259,10 +247,6 @@ fun Home(modifier: Modifier = Modifier) {
                             )
                             delay(1200)
                             processing = Processing(false, "")
-                            isGranted = Utils.isGranted(
-                                context,
-                                Manifest.permission.WRITE_SECURE_SETTINGS
-                            )
                         }
                     }
                 )
@@ -274,9 +258,9 @@ fun Home(modifier: Modifier = Modifier) {
                     stepNumber = 4,
                     icon = Icons.Default.Settings,
                     title = "Configure Voice Assistant Service",
-                    statusText = if (isEnabledVoiceAssistant) "Service Enabled" else if (isGranted) "Ready to Enable" else "Blocked by Step 2",
+                    statusText = if (isEnabledVoiceAssistant) "Service Enabled" else if (isGrantedWriteSecureSettings) "Ready to Enable" else "Blocked by Step 2",
                     isCompleted = isEnabledVoiceAssistant,
-                    isActive = isGranted && !isEnabledVoiceAssistant,
+                    isActive = isGrantedWriteSecureSettings && !isEnabledVoiceAssistant,
                     description = "Configures Google Assistant (GsaVoiceInteractionService) as your active default voice interaction service.",
                     detailText = "Target Component:\ncom.google.android.googlequicksearchbox/\ncom.google.android.voiceinteraction.GsaVoiceInteractionService\n\nSettings Updated:\n- Settings.Secure.assistant\n- Settings.Secure.voice_interaction_service",
                     buttonText = if (isEnabledVoiceAssistant) "Enabled" else "Enable Assistant",
@@ -288,7 +272,6 @@ fun Home(modifier: Modifier = Modifier) {
                             )
                             Utils.enableVoiceAssistant(context)
                             delay(1000)
-                            isEnabledVoiceAssistant = Utils.isEnableVoiceAssistant(context)
                             processing = Processing(false, "")
                         }
                     }

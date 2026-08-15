@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 @SuppressLint("MissingPermission")
 class SnowboyDetector(
     private val context: Context,
-    private val modelFile: String,
+    private val modelFile: String = "",
     private val sensitivity: Float = 0.5f,
     private val audioGain: Float = 1.0f,
     private val onDetected: () -> Unit
@@ -51,7 +51,7 @@ class SnowboyDetector(
 
         detector = SnowboyDetect(
             assetFile("snowboy/common.res"),
-            assetFile(modelFile)
+            modelFile.ifEmpty { assetFile("snowboy/hey_rio.pmdl") }
         ).apply {
             SetSensitivity(sensitivity.toString())
             SetAudioGain(audioGain)
@@ -149,8 +149,8 @@ class SnowboyDetector(
 
     private fun assetFile(path: String): String {
         val file = File(
-            context.cacheDir,
-            path.substringAfterLast('/')
+            context.filesDir,
+            path
         )
 
         if (!file.exists()) {

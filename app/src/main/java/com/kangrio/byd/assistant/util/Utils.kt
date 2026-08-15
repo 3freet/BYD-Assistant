@@ -64,22 +64,28 @@ object Utils {
         return isGrantedWriteSecureSettings && isGrantedVoicePermission && isEnableVoiceAssistant && isGoogleAppInstalled && isAutoStart
     }
 
-    fun startVoiceAssistant(context: Context) {
-        try {
-            if (dingSound == -1) {
-                dingSound = soundPool.load(context, R.raw.ding, 1)
-                soundPool.setOnLoadCompleteListener { pool, i, i1 ->
-                    soundPool.play(dingSound, 1f, 1f, 0, 0, 1f)
-                }
-            } else {
+    private fun playDing(context: Context) {
+        if (dingSound == -1) {
+            dingSound = soundPool.load(context, R.raw.ding, 1)
+            soundPool.setOnLoadCompleteListener { pool, i, i1 ->
                 soundPool.play(dingSound, 1f, 1f, 0, 0, 1f)
             }
+        } else {
+            soundPool.play(dingSound, 1f, 1f, 0, 0, 1f)
+        }
+    }
+
+    fun startVoiceAssistant(context: Context) {
+        try {
             val intent = Intent(Intent.ACTION_VOICE_COMMAND).apply {
                 setPackage("com.google.android.googlequicksearchbox")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
 
             context.startActivity(intent)
+            if (Preferences.playDingOnStart) {
+                playDing(context)
+            }
         } catch (e: Throwable) {
             Log.e("Utils", "startVoiceAssistant", e)
         }
@@ -93,12 +99,12 @@ object Utils {
         withContext(Dispatchers.IO) {
             setupUserHome(context)
             withTimeoutOrNull(10_000L.milliseconds) {
-                val dAdb = Dadb.discover(connectTimeout = 5000, socketTimeout = 5000) ?: run {
-                    Log.e("PermissionUtil", "No device found")
-                    return@withTimeoutOrNull null
-                }
                 while (isActive) {
                     try {
+                        val dAdb = Dadb.discover(connectTimeout = 5000, socketTimeout = 5000) ?: run {
+                            Log.e("PermissionUtil", "No device found")
+                            return@withTimeoutOrNull null
+                        }
                         dAdb.shell("pm grant ${context.packageName} $permission")
                         return@withTimeoutOrNull null
                     } catch (e: Throwable) {
