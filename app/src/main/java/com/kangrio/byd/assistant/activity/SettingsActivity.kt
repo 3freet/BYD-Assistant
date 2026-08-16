@@ -217,6 +217,7 @@ class SettingsActivity : ComponentActivity() {
             sampleRecorder.cancel()
             recordPhase.value = RecordPhase.Idle
         }
+        finishAffinity()
     }
 
     private fun onTrainClick() {
