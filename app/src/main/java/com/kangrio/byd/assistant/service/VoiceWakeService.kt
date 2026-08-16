@@ -109,6 +109,7 @@ class VoiceWakeService : Service() {
         if (!Utils.setupCompleted(this@VoiceWakeService) || !Preferences.startHotword) return
 
         val modelName = Preferences.hotwordModelName
+        detector?.stop()
         detector = SnowboyDetector(
             context = this@VoiceWakeService,
             modelName = modelName,
