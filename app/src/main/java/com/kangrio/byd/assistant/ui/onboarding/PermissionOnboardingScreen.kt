@@ -239,8 +239,11 @@ fun PermissionOnboardingScreen(
                 isRequired = true,
                 actionText = if (isAutoStartGranted) "Configured" else "Allow Auto-Start",
                 onAction = {
-                    Utils.markAutoStartTime(context)
-                    Utils.openAutoStartSettings(context)
+                    scope.launch {
+                        Utils.openAutoStartSettings(context)
+                        delay(2000.milliseconds)
+                        Utils.markAutoStartTime(context)
+                    }
                 }
             ),
             OnboardingPermissionItem(
@@ -701,7 +704,7 @@ fun WizardView(
                     enabled = isAllGranted,
                     onClick = onFinish,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = if (isAllGranted) Color(0xFF2E7D32) else MaterialTheme.colorScheme.secondary
+                        containerColor = if (isAllGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
                     )
                 ) {
                     Text("Launch")
@@ -741,7 +744,7 @@ fun ChecklistView(
             enabled = isAllGranted,
             onClick = onFinish,
             colors = ButtonDefaults.buttonColors(
-                containerColor = if (isAllGranted) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary
+                containerColor = if (isAllGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary
             ),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier
