@@ -9,6 +9,8 @@
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="PackageVisibilityPolicy,QueryAllPackagesPermission" />
 
     <!--HotWord-->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -16,13 +18,6 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
-    <queries>
-        <package android:name="com.google.android.googlequicksearchbox" />
-        <intent>
-            <action android:name="android.intent.action.VOICE_COMMAND" />
-        </intent>
-    </queries>
 
     <application
         android:name=".App"
