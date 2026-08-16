@@ -14,6 +14,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -57,9 +59,11 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.kangrio.byd.assistant.service.VoiceWakeService
+import com.kangrio.byd.assistant.ui.composable.AppIcon
 import com.kangrio.byd.assistant.ui.theme.AssistantTheme
 import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.SnowboyTrainClient
+import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -305,6 +309,11 @@ fun SettingsScreen(
     val context = LocalContext.current
     val outline = MaterialTheme.colorScheme.outlineVariant
 
+    var showAssistantDialog by remember { mutableStateOf(false) }
+    var assistantApps by remember {
+        mutableStateOf(Utils.listAssistantPackages(context))
+    }
+
     var expandedModels by remember { mutableStateOf(false) }
     var selectedModel by remember { mutableStateOf(Preferences.hotwordModelName) }
 
@@ -341,6 +350,55 @@ fun SettingsScreen(
                     .border(1.dp, outline, RoundedCornerShape(20.dp))
                     .verticalScroll(rememberScrollState()),
             ) {
+                SettingRow(
+                    label = "Assistant app",
+                    description = "Select the assistant app to use."
+                ) {
+                        FilledTonalButton(
+                            onClick = {
+                                showAssistantDialog = true
+                            }
+                        ) {
+                            Text(Utils.getCurrentAssistantApp(context).name)
+                        }
+                }
+
+                if (showAssistantDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showAssistantDialog = false },
+                        title = {
+                            Text("Select Assistant App")
+                        },
+                        text = {
+                            Column {
+                                assistantApps.forEach { assistant ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                showAssistantDialog = false
+                                                Utils.enableVoiceAssistant(context, assistant.componentName)
+                                                Preferences.assistantPackageComponent = assistant.componentName
+                                            }
+                                            .padding(vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AppIcon(
+                                            packageName = assistant.packageName,
+                                            modifier = Modifier.size(40.dp)
+                                        )
+
+                                        Spacer(Modifier.width(12.dp))
+
+                                        Text(assistant.name)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {}
+                    )
+                }
+
                 SettingRow(
                     label = "Voice Detection",
                     description = "Enable or disable wake-word detection."

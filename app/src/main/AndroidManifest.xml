@@ -59,7 +59,6 @@
         <service
             android:name=".service.VoiceWakeService"
             android:exported="false"
-            android:process=":service"
             android:foregroundServiceType="microphone" />
     </application>
 </manifest>

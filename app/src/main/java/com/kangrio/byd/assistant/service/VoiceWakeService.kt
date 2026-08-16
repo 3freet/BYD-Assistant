@@ -185,7 +185,7 @@ class VoiceWakeService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Voice Assistant")
-            .setContentText("Click to open hotword detection settings")
+            .setContentText("Click to open settings")
             .setSmallIcon(R.mipmap.ic_launcher_round)
             .setOngoing(true)
             .setContentIntent(pendingIntent)

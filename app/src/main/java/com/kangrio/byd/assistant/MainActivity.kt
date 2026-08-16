@@ -8,6 +8,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -63,7 +64,9 @@ import androidx.compose.ui.tooling.preview.PreviewScreenSizes
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.kangrio.byd.assistant.service.VoiceWakeService
+import com.kangrio.byd.assistant.ui.composable.AppIcon
 import com.kangrio.byd.assistant.ui.theme.AssistantTheme
+import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -111,8 +114,10 @@ fun Home(modifier: Modifier = Modifier) {
 
     var processing by remember { mutableStateOf(Processing(false, "")) }
 
-    var isGoogleAppInstalled by remember {
-        mutableStateOf(Utils.isGoogleAppInstalled(context))
+    var showAssistantDialog by remember { mutableStateOf(false) }
+
+    var assistantApps by remember {
+        mutableStateOf(Utils.listAssistantPackages(context))
     }
 
     var isGrantedWriteSecureSettings by remember {
@@ -126,7 +131,7 @@ fun Home(modifier: Modifier = Modifier) {
 
     var isEnabledVoiceAssistant by remember {
         mutableStateOf(
-            Utils.isEnableVoiceAssistant(context)
+            Utils.isEnabledVoiceAssistant(context)
         )
     }
 
@@ -140,10 +145,10 @@ fun Home(modifier: Modifier = Modifier) {
     LaunchedEffect(lifecycleOwner) {
         while (true) {
             isAutoStart = Utils.isGrantedAutoStart(context)
-            isGoogleAppInstalled = Utils.isGoogleAppInstalled(context)
+            assistantApps = Utils.listAssistantPackages(context)
             isGrantedWriteSecureSettings = Utils.isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
-            isEnabledVoiceAssistant = Utils.isEnableVoiceAssistant(context)
-            if (listOf(isAutoStart, isGoogleAppInstalled, isGrantedWriteSecureSettings, isEnabledVoiceAssistant).all { it }) {
+            isEnabledVoiceAssistant = Utils.isEnabledVoiceAssistant(context)
+            if (listOf(isAutoStart, assistantApps.isNotEmpty(), isGrantedWriteSecureSettings, isEnabledVoiceAssistant).all { it }) {
                 VoiceWakeService.startService(context)
             }
             delay(1_000L.milliseconds)
@@ -179,7 +184,7 @@ fun Home(modifier: Modifier = Modifier) {
                 )
 
                 Text(
-                    text = "Follow each detailed step below to configure and test Google Assistant as your primary voice assistant.",
+                    text = "Follow each detailed step below to configure and test Assistant as your primary voice assistant.",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -195,7 +200,7 @@ fun Home(modifier: Modifier = Modifier) {
                     isCompleted = isAutoStart,
                     isActive = !isAutoStart,
                     description = "Allow auto start when device is rebooted.",
-                    detailText = "Google Assistant needs to be re-enabled after every reboot.",
+                    detailText = "Assistant needs to be re-enabled after every reboot.",
                     buttonText = "Allow",
                     onButtonClick = {
                         Utils.markAutoStartTime(context)
@@ -205,21 +210,62 @@ fun Home(modifier: Modifier = Modifier) {
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                // Step 2: Google App Check
+                // Step 2: Assistant App Check
                 StepCard(
                     stepNumber = 2,
                     icon = Icons.Default.Android,
-                    title = "Google App Installation",
-                    statusText = if (isGoogleAppInstalled) "App Installed" else "App Missing",
-                    isCompleted = isGoogleAppInstalled,
-                    isActive = !isGoogleAppInstalled,
-                    description = "Verifies if the Google App is installed on this device to handle voice command intents.",
-                    detailText = "Package Name:\ncom.google.android.googlequicksearchbox\n\nStatus:\n${if (isGoogleAppInstalled) "Installed and ready" else "Not installed. Install via Store below."}",
-                    buttonText = if (isGoogleAppInstalled) "Installed" else "Install Google App",
+                    title = "Select Assistant App",
+                    statusText = if (assistantApps.isNotEmpty()) Utils.getCurrentAssistantApp(context).name else "App Missing",
+                    isCompleted = Preferences.assistantPackageComponent.isNotEmpty(),
+                    isActive = Preferences.assistantPackageComponent.isEmpty(),
+                    description = "Choose the AI assistant you want to use",
+                    detailText = "Select an installed assistant that supports VoiceInteractionService.\nYour selected assistant will be used when triggered.",
+                    buttonText = if (assistantApps.isEmpty()) "Install Assistant" else "Select Assistant",
                     onButtonClick = {
-                        Utils.openGoogleAppInStore(context)
+                        if (assistantApps.isNotEmpty()) {
+                            showAssistantDialog = true
+                        } else {
+                            Utils.openStore(context)
+                        }
                     }
                 )
+
+                if (showAssistantDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showAssistantDialog = false },
+                        title = {
+                            Text("Select Assistant App")
+                        },
+                        text = {
+                            Column {
+                                assistantApps.forEach { assistant ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                Preferences.assistantPackageComponent =
+                                                    "${assistant.packageName}/${assistant.className}"
+
+                                                showAssistantDialog = false
+                                            }
+                                            .padding(vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        AppIcon(
+                                            packageName = assistant.packageName,
+                                            modifier = Modifier.size(40.dp)
+                                        )
+
+                                        Spacer(Modifier.width(12.dp))
+
+                                        Text(assistant.name)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {}
+                    )
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -228,9 +274,9 @@ fun Home(modifier: Modifier = Modifier) {
                     stepNumber = 3,
                     icon = Icons.Default.Key,
                     title = "Grant Write Secure Settings Permission",
-                    statusText = if (isGrantedWriteSecureSettings) "Permission Granted" else if (isGoogleAppInstalled) "Action Required" else "Blocked by Step 1",
+                    statusText = if (isGrantedWriteSecureSettings) "Permission Granted" else if (assistantApps.isNotEmpty()) "Action Required" else "Blocked by Step 1",
                     isCompleted = isGrantedWriteSecureSettings,
-                    isActive = isGoogleAppInstalled && !isGrantedWriteSecureSettings,
+                    isActive = assistantApps.isNotEmpty() && !isGrantedWriteSecureSettings,
                     description = "Required to write system-level assistant configuration keys into Android Secure Settings.",
                     detailText = "Permission Required:\nandroid.permission.WRITE_SECURE_SETTINGS\n\nAutomatic Method:\nUses dadb to connect locally on device over ADB socket and execute pm grant.",
                     manualAdbCommand = "adb shell pm grant ${context.packageName} ${Manifest.permission.WRITE_SECURE_SETTINGS}",
@@ -261,16 +307,16 @@ fun Home(modifier: Modifier = Modifier) {
                     statusText = if (isEnabledVoiceAssistant) "Service Enabled" else if (isGrantedWriteSecureSettings) "Ready to Enable" else "Blocked by Step 2",
                     isCompleted = isEnabledVoiceAssistant,
                     isActive = isGrantedWriteSecureSettings && !isEnabledVoiceAssistant,
-                    description = "Configures Google Assistant (GsaVoiceInteractionService) as your active default voice interaction service.",
-                    detailText = "Target Component:\ncom.google.android.googlequicksearchbox/\ncom.google.android.voiceinteraction.GsaVoiceInteractionService\n\nSettings Updated:\n- Settings.Secure.assistant\n- Settings.Secure.voice_interaction_service",
+                    description = "Configures Assistant (GsaVoiceInteractionService) as your active default voice interaction service.",
+                    detailText = "Target Component:\n- ${Preferences.assistantPackageComponent}\n\nSettings Updated:\n- Settings.Secure.assistant\n- Settings.Secure.voice_interaction_service",
                     buttonText = if (isEnabledVoiceAssistant) "Enabled" else "Enable Assistant",
                     onButtonClick = {
                         scope.launch {
                             processing = Processing(
                                 true,
-                                "Writing voice interaction settings for Google Assistant..."
+                                "Writing voice interaction settings for Assistant..."
                             )
-                            Utils.enableVoiceAssistant(context)
+                            Utils.enableVoiceAssistant(context, Preferences.assistantPackageComponent)
                             delay(1000)
                             processing = Processing(false, "")
                         }
@@ -287,8 +333,8 @@ fun Home(modifier: Modifier = Modifier) {
                     statusText = if (isEnabledVoiceAssistant) "Ready to Test" else "Blocked by Step 4",
                     isCompleted = false,
                     isActive = isEnabledVoiceAssistant,
-                    description = "Launches the voice command intent to verify Google Assistant opens properly.",
-                    detailText = "Intent Action:\nandroid.intent.action.VOICE_COMMAND\n\nBehavior:\nLaunching this application in the future will automatically trigger Google Assistant.",
+                    description = "Launches the voice command intent to verify Assistant opens properly.",
+                    detailText = "Intent Action:\nandroid.intent.action.ASSIST\n\nBehavior:\nLaunching this application in the future will automatically trigger Assistant.",
                     buttonText = "Launch Test",
                     onButtonClick = {
                         Utils.startVoiceAssistant(context)

@@ -8,8 +8,12 @@ import androidx.core.content.edit
 object Preferences {
     lateinit var prefs: SharedPreferences
     fun init(context: Context) {
-        prefs = context.getSharedPreferences("prefs", Context.MODE_PRIVATE)
+        prefs = context.getSharedPreferences(context.packageName, Context.MODE_PRIVATE)
     }
+
+    var assistantPackageComponent: String
+        get() = prefs.getString(Constant.PREFS_ASSISTANT_PACKAGE_COMPONENT, "") ?: ""
+        set(value) = prefs.edit { putString(Constant.PREFS_ASSISTANT_PACKAGE_COMPONENT, value) }
 
     var startHotword: Boolean
         get() = prefs.getBoolean(Constant.PREFS_START_HOTWORD, true)

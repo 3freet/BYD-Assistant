@@ -79,6 +79,7 @@ dependencies {
     implementation(libs.dadb)
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.okhttp)
+    implementation(libs.accompanist.drawablepainter)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
