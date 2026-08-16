@@ -42,7 +42,6 @@
         <activity
             android:name=".StartActivity"
             android:exported="true"
-            android:noHistory="true"
             android:theme="@style/Theme.Start">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

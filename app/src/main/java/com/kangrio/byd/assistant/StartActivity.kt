@@ -6,33 +6,32 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.Settings
+import android.widget.Toast
 import com.kangrio.byd.assistant.util.Utils
 import androidx.core.net.toUri
 import com.kangrio.byd.assistant.service.VoiceWakeService
 
 class StartActivity : Activity() {
 
-    private var startupCompleted = false
-
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        VoiceWakeService.startService(this)
     }
 
     override fun onResume() {
         super.onResume()
-
-        if (!startupCompleted) {
+        if (setupPermissions()) {
             continueStartup()
         }
     }
 
-    private fun continueStartup() {
+    private fun setupPermissions(): Boolean {
         if (!Utils.isGranted(this, Manifest.permission.RECORD_AUDIO)) {
             requestPermissions(
                 arrayOf(Manifest.permission.RECORD_AUDIO),
                 REQUEST_CODE_RECORD_AUDIO
             )
-            return
+            return false
         }
 
         if (!Settings.canDrawOverlays(this)) {
@@ -44,13 +43,13 @@ class StartActivity : Activity() {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
             )
-            return
+            return false
         }
 
-        startupCompleted = true
+        return true
+    }
 
-        VoiceWakeService.startService(this)
-
+    private fun continueStartup() {
         if (Utils.setupCompleted(this)) {
             Utils.startVoiceAssistant(this)
         } else {
@@ -74,9 +73,8 @@ class StartActivity : Activity() {
             return
         }
 
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) {
-            continueStartup()
-        } else {
+        if (grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Require Record Audio Permission", Toast.LENGTH_SHORT).show()
             finish()
         }
     }
