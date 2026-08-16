@@ -125,7 +125,6 @@ object Utils {
                 if (packageName.isNotEmpty()) {
                     setPackage(packageName)
                 }
-                flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
 
             when (packageName) {
@@ -135,11 +134,7 @@ object Utils {
 
                 Constant.CHATGPT_APP_PACKAGE -> {
                     intent.component = ComponentName(packageName, Constant.CHATGPT_APP_ASSISTANT_CLASS_NAME)
-                    intent.putExtras(
-                        Bundle().apply {
-                            putBoolean("isAssistant", true)
-                        }
-                    )
+                    intent.putExtra("isAssistant", true)
                 }
             }
 
