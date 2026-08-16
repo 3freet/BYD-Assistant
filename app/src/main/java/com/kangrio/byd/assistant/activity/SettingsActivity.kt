@@ -30,6 +30,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
@@ -61,7 +63,7 @@ import com.kangrio.byd.assistant.util.SnowboyTrainClient
 import kotlinx.coroutines.launch
 import java.io.File
 
-private const val WAKE_WORD_MODEL_NAME = "user_hey_rio"
+private const val WAKE_WORD_MODEL_NAME = "user_custom"
 private const val SEASALT_BASE_URL = "https://snowboy.jolanrensen.nl" // snowboy-seasalt host
 private const val MIN_SAMPLES = 3
 
@@ -190,7 +192,7 @@ class SettingsActivity : ComponentActivity() {
                         recordPhase = phase,
                         sampleCount = currentSamples.size,
                         onTrainClick = { onTrainClick() },
-                        onDefaultClick = { VoiceWakeService.setModel(this, "") },
+                        onModelChanged = { model -> VoiceWakeService.setModel(this, model) },
                         onStartRecordClick = { onStartOrStopRecord(phase) },
                         onSubmitClick = { submitSamples(currentSamples) },
                         onNewClick = { resetPanel() },
@@ -254,10 +256,10 @@ class SettingsActivity : ComponentActivity() {
             when (val result = trainClient.train(
                 modelName = WAKE_WORD_MODEL_NAME,
                 samples = currentSamples,
-                outputDir = filesDir.resolve("snowboy")
+                outputDir = filesDir.resolve("snowboy/models")
             )) {
                 is SnowboyTrainClient.TrainResult.Success -> {
-                    VoiceWakeService.setModel(this@SettingsActivity, result.pmdlFile.absolutePath)
+                    VoiceWakeService.setModel(this@SettingsActivity, result.pmdlFile.nameWithoutExtension)
                     recordPhase.value = RecordPhase.Trained(result.pmdlFile)
                     Toast.makeText(this@SettingsActivity, "Wake word trained", Toast.LENGTH_SHORT).show()
                 }
@@ -295,7 +297,7 @@ fun SettingsScreen(
     recordPhase: RecordPhase = RecordPhase.Idle,
     sampleCount: Int = 0,
     onTrainClick: () -> Unit,
-    onDefaultClick: () -> Unit = {},
+    onModelChanged: (String) -> Unit = { _-> },
     onStartRecordClick: () -> Unit = {},
     onSubmitClick: () -> Unit = {},
     onNewClick: () -> Unit = {},
@@ -303,10 +305,20 @@ fun SettingsScreen(
     val context = LocalContext.current
     val outline = MaterialTheme.colorScheme.outlineVariant
 
+    var expandedModels by remember { mutableStateOf(false) }
+    var selectedModel by remember { mutableStateOf(Preferences.hotwordModelName) }
+
     var isStateOn by remember { mutableStateOf(Preferences.startHotword) }
     var isPlayDing by remember { mutableStateOf(Preferences.playDingOnStart) }
     var sensitivity by remember { mutableFloatStateOf(Preferences.hotwordSensitivity) }
     var gain by remember { mutableFloatStateOf(Preferences.hotwordGain) }
+
+    val models = remember(selectedModel) {
+        context.filesDir.resolve("snowboy/models")
+            .listFiles()
+            ?.filter { it.isFile && it.extension.equals("pmdl", ignoreCase = true) }
+            ?: emptyList()
+    }
 
     Box(
         modifier = modifier
@@ -423,8 +435,8 @@ fun SettingsScreen(
                 HorizontalDivider(color = outline)
 
                 SettingRow(
-                    label = "Train Wake Word Model",
-                    description = "Record your voice samples to improve recognition of \"Hey Rio\" by recording at least 3 samples."
+                    label = "Record Your Custom Wake Word",
+                    description = "Record at least 3 samples of your custom wake word to train your voice model."
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -438,10 +450,28 @@ fun SettingsScreen(
                         ) {
                             Text("Train")
                         }
-                        FilledTonalButton(
-                            onClick = onDefaultClick
-                        ) {
-                            Text("Default")
+                        Box {
+                            FilledTonalButton(
+                                onClick = { expandedModels = true }
+                            ) {
+                                Text(selectedModel)
+                            }
+
+                            DropdownMenu(
+                                expanded = expandedModels,
+                                onDismissRequest = { expandedModels = false }
+                            ) {
+                                models.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = { Text(model.nameWithoutExtension) },
+                                        onClick = {
+                                            onModelChanged(model.nameWithoutExtension)
+                                            selectedModel = model.nameWithoutExtension
+                                            expandedModels = false
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -455,7 +485,10 @@ fun SettingsScreen(
                         phase = recordPhase,
                         sampleCount = sampleCount,
                         onStartRecordClick = onStartRecordClick,
-                        onSubmitClick = onSubmitClick,
+                        onSubmitClick = {
+                            selectedModel = "user_custom"
+                            onSubmitClick()
+                        },
                         onNewClick = onNewClick,
                     )
                 }

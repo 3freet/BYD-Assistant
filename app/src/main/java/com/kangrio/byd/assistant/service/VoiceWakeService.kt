@@ -22,8 +22,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.File
 
 class VoiceWakeService : Service() {
     private var detector: SnowboyDetector? = null
@@ -99,21 +97,21 @@ class VoiceWakeService : Service() {
         }
     }
 
-    fun setModel(pmdlFilePath: String) {
+    fun setModel(modelName: String) {
         stopHotwordDetection()
-        Preferences.hotwordModelPath = pmdlFilePath
+        Preferences.hotwordModelName = modelName
         scope.launch {
             startHotwordDetection()
         }
     }
 
-    suspend fun startHotwordDetection() = withContext(Dispatchers.IO) {
-        if (!Utils.setupCompleted(this@VoiceWakeService) || !Preferences.startHotword) return@withContext
+    fun startHotwordDetection() {
+        if (!Utils.setupCompleted(this@VoiceWakeService) || !Preferences.startHotword) return
 
-        val modelPath = Preferences.hotwordModelPath
+        val modelName = Preferences.hotwordModelName
         detector = SnowboyDetector(
             context = this@VoiceWakeService,
-            modelFile = modelPath,
+            modelName = modelName,
             sensitivity = Preferences.hotwordSensitivity,
             audioGain = Preferences.hotwordGain,
         ) {
@@ -121,7 +119,7 @@ class VoiceWakeService : Service() {
         }
 
         detector?.start()
-        showToast("""Hotword Detection Started Say: "Hey Rio" """)
+        showToast("""Hotword Detection Started""")
     }
 
     fun stopHotwordDetection() {

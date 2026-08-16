@@ -15,9 +15,9 @@ object Preferences {
         get() = prefs.getBoolean(Constant.PREFS_START_HOTWORD, true)
         set(value) = prefs.edit { putBoolean(Constant.PREFS_START_HOTWORD, value) }
 
-    var hotwordModelPath: String
-        get() = prefs.getString(Constant.PREFS_HOTWORD_MODEL_PATH, "") ?: ""
-        set(value) = prefs.edit { putString(Constant.PREFS_HOTWORD_MODEL_PATH, value) }
+    var hotwordModelName: String
+        get() = prefs.getString(Constant.PREFS_HOTWORD_MODEL_NAME, "hey_rio") ?: "hey_rio"
+        set(value) = prefs.edit { putString(Constant.PREFS_HOTWORD_MODEL_NAME, value) }
 
     var hotwordSensitivity: Float
         get() = prefs.getFloat(Constant.PREFS_HOTWORD_SENSITIVITY, 0.5f)

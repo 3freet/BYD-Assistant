@@ -13,12 +13,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 @SuppressLint("MissingPermission")
 class SnowboyDetector(
     private val context: Context,
-    private val modelFile: String = "",
+    private val modelName: String = "hey_rio",
     private val sensitivity: Float = 0.5f,
     private val audioGain: Float = 1.0f,
     private val onDetected: () -> Unit
 ) {
 
+    private val modelsPath = "snowboy/models"
     private var detector: SnowboyDetect? = null
     private var audioRecord: AudioRecord? = null
 
@@ -26,6 +27,24 @@ class SnowboyDetector(
     private val paused = AtomicBoolean(false)
 
     private var thread: Thread? = null
+
+    init {
+        context.assets.list(modelsPath)?.forEach { name ->
+            val file = File(
+                context.filesDir,
+                "$modelsPath/$name"
+            ).apply {
+                parentFile?.mkdirs()
+            }
+            if (!file.exists()) {
+                context.assets.open("$modelsPath/$name").use { input ->
+                    FileOutputStream(file).use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+        }
+    }
 
     fun start() {
         if (!running.compareAndSet(false, true)) return
@@ -51,7 +70,7 @@ class SnowboyDetector(
 
         detector = SnowboyDetect(
             assetFile("snowboy/common.res"),
-            modelFile.ifEmpty { assetFile("snowboy/default_hey_rio.pmdl") }
+            getModelPath(modelName)
         ).apply {
             SetSensitivity(sensitivity.toString())
             SetAudioGain(audioGain)
@@ -145,6 +164,13 @@ class SnowboyDetector(
         detector = null
 
         thread = null
+    }
+
+    private fun getModelPath(modelName: String): String {
+        return File(
+            context.filesDir,
+            "snowboy/models/$modelName.pmdl"
+        ).absolutePath
     }
 
     private fun assetFile(path: String): String {
