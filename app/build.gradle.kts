@@ -8,6 +8,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val runNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orElse("0")
+
 android {
     namespace = "com.kangrio.byd.assistant"
     compileSdk {
@@ -47,9 +49,16 @@ android {
             optimization {
                 enable = true
             }
-            if (file("signing.properties").exists()) {
-                signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (file("signing.properties").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
+        }
+
+        register("beta") {
+            initWith(getByName("release"))
+            versionNameSuffix = "-beta.${runNumber.get()}"
         }
     }
     compileOptions {
