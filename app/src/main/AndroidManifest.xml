@@ -31,10 +31,6 @@
         android:theme="@style/Theme.Assistant"
         android:usesCleartextTraffic="true">
         <activity
-            android:name=".MainActivity"
-            android:exported="false"
-            android:theme="@style/Theme.Assistant" />
-        <activity
             android:name=".StartActivity"
             android:exported="true"
             android:theme="@style/Theme.Start">
