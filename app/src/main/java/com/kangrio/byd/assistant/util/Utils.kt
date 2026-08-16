@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.SoundPool
 import android.os.Build
+import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.service.voice.VoiceInteractionService
@@ -63,6 +64,13 @@ object Utils {
         }
     }
 
+    fun isSupportAssistService(context: Context, packageName: String): Boolean {
+        val pm = context.packageManager
+        val intent = Intent(VoiceInteractionService.SERVICE_INTERFACE)
+        intent.setPackage(packageName)
+        return pm.queryIntentServices(intent, 0).isNotEmpty()
+    }
+
     fun getCurrentAssistantApp(context: Context): AssistantApp {
         val assistant = Settings.Secure.getString(context.contentResolver, "assistant") ?: return AssistantApp()
 
@@ -113,18 +121,26 @@ object Utils {
         try {
             val assistantApp = getCurrentAssistantApp(context)
             val packageName = assistantApp.packageName
-
-            val action = if (packageName == Constant.GOOGLE_APP_PACKAGE) {
-                Intent.ACTION_VOICE_COMMAND
-            } else {
-                Intent.ACTION_ASSIST
-            }
-
-            val intent = Intent(action).apply {
+            val intent = Intent(Intent.ACTION_ASSIST).apply {
                 if (packageName.isNotEmpty()) {
                     setPackage(packageName)
                 }
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+
+            when (packageName) {
+                Constant.GOOGLE_APP_PACKAGE -> {
+                    intent.action = Intent.ACTION_VOICE_COMMAND
+                }
+
+                Constant.CHATGPT_APP_PACKAGE -> {
+                    intent.component = ComponentName(packageName, Constant.CHATGPT_APP_ASSISTANT_CLASS_NAME)
+                    intent.putExtras(
+                        Bundle().apply {
+                            putBoolean("isAssistant", true)
+                        }
+                    )
+                }
             }
 
             context.startActivity(intent)

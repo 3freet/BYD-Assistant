@@ -2,7 +2,9 @@ package com.kangrio.byd.assistant
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
+import com.kangrio.byd.assistant.activity.PermissionOnboardingActivity
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -33,6 +35,7 @@ import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -188,8 +191,20 @@ fun Home(modifier: Modifier = Modifier) {
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(top = 8.dp, bottom = 24.dp)
+                    modifier = Modifier.padding(top = 8.dp, bottom = 12.dp)
                 )
+
+                OutlinedButton(
+                    onClick = {
+                        context.startActivity(Intent(context, PermissionOnboardingActivity::class.java))
+                    },
+                    modifier = Modifier.padding(bottom = 20.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(Icons.Default.Security, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Open Permission Onboarding Wizard")
+                }
 
                 // Step 1: Auto Start Check
                 StepCard(

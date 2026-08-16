@@ -1,6 +1,7 @@
 package com.kangrio.byd.assistant.activity
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.MediaRecorder
 import android.net.Uri
@@ -43,6 +44,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,6 +59,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.lifecycleScope
 import com.kangrio.byd.assistant.service.VoiceWakeService
 import com.kangrio.byd.assistant.ui.composable.AppIcon
@@ -64,8 +67,10 @@ import com.kangrio.byd.assistant.ui.theme.AssistantTheme
 import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.SnowboyTrainClient
 import com.kangrio.byd.assistant.util.Utils
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
 private const val WAKE_WORD_MODEL_NAME = "user_custom"
 private const val SEASALT_BASE_URL = "https://snowboy.jolanrensen.nl" // snowboy-seasalt host
@@ -307,12 +312,15 @@ fun SettingsScreen(
     onNewClick: () -> Unit = {},
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+
     val outline = MaterialTheme.colorScheme.outlineVariant
 
     var showAssistantDialog by remember { mutableStateOf(false) }
     var assistantApps by remember {
         mutableStateOf(Utils.listAssistantPackages(context))
     }
+    var isWriteSecureSettingsGranted by remember { mutableStateOf(Utils.isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)) }
 
     var expandedModels by remember { mutableStateOf(false) }
     var selectedModel by remember { mutableStateOf(Preferences.hotwordModelName) }
@@ -327,6 +335,13 @@ fun SettingsScreen(
             .listFiles()
             ?.filter { it.isFile && it.extension.equals("pmdl", ignoreCase = true) }
             ?: emptyList()
+    }
+
+    LaunchedEffect(lifecycleOwner) {
+        while (true) {
+            isWriteSecureSettingsGranted = Utils.isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
+            delay(1_000L.milliseconds)
+        }
     }
 
     Box(
@@ -351,11 +366,28 @@ fun SettingsScreen(
                     .verticalScroll(rememberScrollState()),
             ) {
                 SettingRow(
+                    label = "Permission Onboarding",
+                    description = "Review and manage all required app permissions."
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            context.startActivity(Intent(context, PermissionOnboardingActivity::class.java))
+                        }
+                    ) {
+                        Text("Open Wizard")
+                    }
+                }
+
+                SettingRow(
                     label = "Assistant app",
                     description = "Select the assistant app to use."
                 ) {
                         FilledTonalButton(
                             onClick = {
+                                if (!isWriteSecureSettingsGranted) {
+                                    Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
+                                    return@FilledTonalButton
+                                }
                                 showAssistantDialog = true
                             }
                         ) {

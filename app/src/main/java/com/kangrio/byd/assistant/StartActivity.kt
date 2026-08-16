@@ -1,14 +1,12 @@
 package com.kangrio.byd.assistant
 
-import android.Manifest
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.provider.Settings
 import android.widget.Toast
 import com.kangrio.byd.assistant.util.Utils
-import androidx.core.net.toUri
+import com.kangrio.byd.assistant.activity.PermissionOnboardingActivity
 import com.kangrio.byd.assistant.service.VoiceWakeService
 
 class StartActivity : Activity() {
@@ -20,40 +18,17 @@ class StartActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
-        if (setupPermissions()) {
+        if (Utils.setupCompleted(this)) {
             continueStartup()
+        } else {
+            startActivity(Intent(this, PermissionOnboardingActivity::class.java))
+            finish()
         }
-    }
-
-    private fun setupPermissions(): Boolean {
-        if (!Utils.isGranted(this, Manifest.permission.RECORD_AUDIO)) {
-            requestPermissions(
-                arrayOf(Manifest.permission.RECORD_AUDIO),
-                REQUEST_CODE_RECORD_AUDIO
-            )
-            return false
-        }
-
-        if (!Settings.canDrawOverlays(this)) {
-            startActivity(
-                Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    "package:$packageName".toUri()
-                ).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-            )
-            return false
-        }
-
-        return true
     }
 
     private fun continueStartup() {
         if (Utils.setupCompleted(this)) {
             Utils.startVoiceAssistant(this)
-        } else {
-            startActivity(Intent(this, MainActivity::class.java))
         }
         finishAffinity()
     }
