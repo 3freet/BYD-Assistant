@@ -243,9 +243,7 @@ fun Home(modifier: Modifier = Modifier) {
                                         modifier = Modifier
                                             .fillMaxWidth()
                                             .clickable {
-                                                Preferences.assistantPackageComponent =
-                                                    "${assistant.packageName}/${assistant.className}"
-
+                                                Preferences.assistantPackageComponent = assistant.componentName
                                                 showAssistantDialog = false
                                             }
                                             .padding(vertical = 12.dp),

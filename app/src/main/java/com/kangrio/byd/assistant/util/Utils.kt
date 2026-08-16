@@ -44,7 +44,6 @@ object Utils {
         Thread.sleep(100)
         putSecureSetting(context, "assistant", componentName)
         putSecureSetting(context, "voice_interaction_service", componentName)
-        Preferences.assistantPackageComponent = componentName
     }
 
     fun listAssistantPackages(context: Context): List<AssistantApp> {
