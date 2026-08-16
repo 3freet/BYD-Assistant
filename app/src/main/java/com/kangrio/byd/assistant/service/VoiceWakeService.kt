@@ -155,7 +155,7 @@ class VoiceWakeService : Service() {
                 NotificationChannel(
                     CHANNEL_ID,
                     "Voice Assistant",
-                    NotificationManager.IMPORTANCE_LOW
+                    NotificationManager.IMPORTANCE_HIGH
                 )
             )
         }
