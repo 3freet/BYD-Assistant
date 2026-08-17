@@ -34,12 +34,15 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import com.kangrio.byd.assistant.ota.OtaUpdater
+import com.kangrio.byd.assistant.data.ReleaseInfo
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -155,6 +158,7 @@ class SettingsActivity : ComponentActivity() {
     private var showTrainPanel = mutableStateOf(false)
     private var recordPhase = mutableStateOf<RecordPhase>(RecordPhase.Idle)
     private var samples = mutableStateOf<List<File>>(emptyList())
+    private var initialOtaRelease = mutableStateOf<ReleaseInfo?>(null)
 
     private val requestMicPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -183,15 +187,33 @@ class SettingsActivity : ComponentActivity() {
             outputDir = cacheDir.resolve("wake_samples")
         )
 
+        val otaVersion = intent.getStringExtra("EXTRA_OTA_VERSION")
+        val otaUrl = intent.getStringExtra("EXTRA_OTA_URL")
+        val otaName = intent.getStringExtra("EXTRA_OTA_NAME")
+        val otaBody = intent.getStringExtra("EXTRA_OTA_BODY")
+        if (!otaVersion.isNullOrEmpty() && !otaUrl.isNullOrEmpty()) {
+            initialOtaRelease.value = ReleaseInfo(
+                tagName = otaVersion,
+                versionName = otaVersion.removePrefix("v").removePrefix("V"),
+                title = otaVersion,
+                body = otaBody ?: "",
+                htmlUrl = "",
+                downloadUrl = otaUrl,
+                apkName = otaName ?: "Assistant.apk"
+            )
+        }
+
         setContent {
             AssistantTheme {
                 val panelOpen by showTrainPanel
                 val phase by recordPhase
                 val currentSamples by samples
+                val otaRelease by initialOtaRelease
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { paddingValues ->
                     SettingsScreen(
                         modifier = Modifier.padding(paddingValues),
+                        initialOtaRelease = otaRelease,
                         onStateToggle = { state -> VoiceWakeService.setState(this, state) },
                         onPlayDingToggle = { state -> Preferences.playDingOnStart = state },
                         onSensitivityChange = { VoiceWakeService.setSensitivity(this, it) },
@@ -289,6 +311,7 @@ class SettingsActivity : ComponentActivity() {
 @Composable
 fun SettingsScreen(
     modifier: Modifier = Modifier,
+    initialOtaRelease: ReleaseInfo? = null,
     onStateToggle: (Boolean) -> Unit,
     onPlayDingToggle: (Boolean) -> Unit = {},
     onSensitivityChange: (Float) -> Unit = {},
@@ -322,6 +345,12 @@ fun SettingsScreen(
     var isPlayDing by remember { mutableStateOf(Preferences.playDingOnStart) }
     var sensitivity by remember { mutableFloatStateOf(Preferences.hotwordSensitivity) }
     var gain by remember { mutableFloatStateOf(Preferences.hotwordGain) }
+
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var availableUpdate by remember { mutableStateOf<ReleaseInfo?>(initialOtaRelease) }
+    var showUpdateDialog by remember { mutableStateOf(initialOtaRelease != null) }
+    var isDownloadingUpdate by remember { mutableStateOf(false) }
+    var downloadProgress by remember { mutableFloatStateOf(0f) }
 
     val models = remember(selectedModel) {
         context.filesDir.resolve("snowboy/models")
@@ -496,6 +525,39 @@ fun SettingsScreen(
                     }
                 }
 
+                SettingRow(
+                    label = "Check for Updates",
+                    description = "Current version: v${OtaUpdater.getCurrentVersionName(context)}"
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            if (isCheckingUpdate || isDownloadingUpdate) return@FilledTonalButton
+                            isCheckingUpdate = true
+                            scope.launch {
+                                val release = OtaUpdater.checkForUpdate(context, force = true)
+                                isCheckingUpdate = false
+                                if (release != null) {
+                                    availableUpdate = release
+                                    showUpdateDialog = true
+                                } else {
+                                    Toast.makeText(
+                                        context,
+                                        "Assistant is up-to-date (v${OtaUpdater.getCurrentVersionName(context)})",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                }
+                            }
+                        },
+                        enabled = !isCheckingUpdate && !isDownloadingUpdate
+                    ) {
+                        if (isCheckingUpdate) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                        } else {
+                            Text("Check Now")
+                        }
+                    }
+                }
+
                 HorizontalDivider(color = outline)
 
                 SettingRow(
@@ -644,6 +706,77 @@ fun SettingsScreen(
             showAssistantPermissionsDialog = false
             Toast.makeText(context, "No need to grant permissions", Toast.LENGTH_SHORT).show()
         }
+    }
+
+    if (showUpdateDialog && availableUpdate != null) {
+        val update = availableUpdate!!
+        AlertDialog(
+            onDismissRequest = {
+                if (!isDownloadingUpdate) {
+                    showUpdateDialog = false
+                }
+            },
+            title = {
+                Text("Update Available: ${update.tagName}")
+            },
+            text = {
+                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                    Text(
+                        text = if (update.body.isNotBlank()) update.body else "A new version of Assistant is available.",
+                        style = MaterialTheme.typography.bodyMedium
+                    )
+                    if (isDownloadingUpdate) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        LinearProgressIndicator(
+                            progress = { downloadProgress },
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "Downloading... ${(downloadProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (isDownloadingUpdate) return@Button
+                        isDownloadingUpdate = true
+                        downloadProgress = 0f
+                        scope.launch {
+                            val file = OtaUpdater.downloadApk(
+                                context = context,
+                                downloadUrl = update.downloadUrl,
+                                fileName = update.apkName.ifEmpty { "Assistant_${update.tagName}.apk" },
+                                onProgress = { progress ->
+                                    downloadProgress = progress
+                                }
+                            )
+                            isDownloadingUpdate = false
+                            if (file != null && file.exists()) {
+                                showUpdateDialog = false
+                                OtaUpdater.installApk(context, file)
+                            } else {
+                                Toast.makeText(context, "Failed to download update", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    enabled = !isDownloadingUpdate
+                ) {
+                    Text(if (isDownloadingUpdate) "Downloading..." else "Download & Install")
+                }
+            },
+            dismissButton = {
+                if (!isDownloadingUpdate) {
+                    OutlinedButton(onClick = { showUpdateDialog = false }) {
+                        Text("Later")
+                    }
+                }
+            }
+        )
     }
 }
 

@@ -22,6 +22,9 @@ import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import android.content.BroadcastReceiver
+import android.content.IntentFilter
+import com.kangrio.byd.assistant.ota.OtaUpdater
 import kotlinx.coroutines.launch
 
 class VoiceWakeService : Service() {
@@ -30,10 +33,24 @@ class VoiceWakeService : Service() {
     private val handler = Handler(Looper.getMainLooper())
     lateinit var toast: Toast
 
+    private val screenReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent?) {
+            if (intent?.action == Intent.ACTION_SCREEN_ON) {
+                Log.d("VoiceWakeService", "Screen turned ON, checking for OTA update...")
+                OtaUpdater.checkUpdateInBackground(context, force = false)
+            }
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         isStarted = true
         createNotificationChannel()
+
+        val filter = IntentFilter(Intent.ACTION_SCREEN_ON)
+        registerReceiver(screenReceiver, filter)
+
+        OtaUpdater.checkUpdateInBackground(this, force = false)
 
         scope.launch {
             startHotwordDetection()
@@ -138,6 +155,9 @@ class VoiceWakeService : Service() {
 
     override fun onDestroy() {
         isStarted = false
+        try {
+            unregisterReceiver(screenReceiver)
+        } catch (_: Exception) {}
         stopHotwordDetection()
         super.onDestroy()
     }

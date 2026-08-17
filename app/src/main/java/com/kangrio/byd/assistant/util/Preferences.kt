@@ -34,4 +34,12 @@ object Preferences {
     var playDingOnStart: Boolean
         get() = prefs.getBoolean(Constant.PREFS_PLAY_DING_ON_START, true)
         set(value) = prefs.edit { putBoolean(Constant.PREFS_PLAY_DING_ON_START, value) }
+
+    var lastOtaCheckTime: Long
+        get() = prefs.getLong(Constant.PREFS_LAST_OTA_CHECK_TIME, 0L)
+        set(value) = prefs.edit { putLong(Constant.PREFS_LAST_OTA_CHECK_TIME, value) }
+
+    var latestOtaVersion: String
+        get() = prefs.getString(Constant.PREFS_LATEST_OTA_VERSION, "") ?: ""
+        set(value) = prefs.edit { putString(Constant.PREFS_LATEST_OTA_VERSION, value) }
 }
