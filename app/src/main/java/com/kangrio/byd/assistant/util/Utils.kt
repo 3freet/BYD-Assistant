@@ -193,11 +193,13 @@ object Utils {
             withTimeoutOrNull(10_000L.milliseconds) {
                 while (isActive) {
                     try {
-                        val dAdb = Dadb.discover(connectTimeout = 5000, socketTimeout = 5000) ?: run {
-                            Log.e("Utils", "No device found")
-                            return@withTimeoutOrNull null
-                        }
-                        dAdb.shell(cmd)
+                        var dAdb = Dadb.discover(connectTimeout = 1000, socketTimeout = 1000)
+                        dAdb?.shell("echo 'init'") ?: throw Throwable("fail to connect adb")
+                        dAdb.close()
+
+                        dAdb = Dadb.discover(connectTimeout = 1000, socketTimeout = 5000)
+                        dAdb?.shell(cmd)
+                        dAdb?.close()
                         return@withTimeoutOrNull null
                     } catch (e: Throwable) {
                         delay(100L.milliseconds)
