@@ -15,6 +15,7 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.kangrio.byd.assistant.R
+import com.kangrio.byd.assistant.StartActivity
 import com.kangrio.byd.assistant.activity.SettingsActivity
 import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.Utils
@@ -131,7 +132,11 @@ class VoiceWakeService : Service() {
 
     private fun onHeyRioDetected() {
         scope.launch(Dispatchers.Main) {
-            Utils.startVoiceAssistant(this@VoiceWakeService)
+            startActivity(
+                Intent(this@VoiceWakeService, StartActivity::class.java).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+                }
+            )
         }
     }
 
