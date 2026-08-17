@@ -67,6 +67,7 @@ jobs:
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           prerelease: true
           generate_release_notes: true
           files: ${{ steps.apk-path.outputs.path }}
