@@ -1,113 +1,108 @@
 # Assistant
 
-Assistant (`com.kangrio.byd.assistant`) is an Android utility designed for BYD vehicle infotainment units and custom Android head units.
+**Assistant** (`com.kangrio.byd.assistant`) is an Android utility and voice interaction bridge tailored for BYD vehicle infotainment units (DiLink) and custom Android head units / AOSP devices.
 
-It configures Google Assistant (`com.google.android.googlequicksearchbox`) as the default voice interaction service on the device and provides a direct launcher shortcut for voice commands.
-
----
-
-## Features
-
-- **One-Tap Voice Launcher**: Once set up, launching the app (`StartActivity`) checks requirements and immediately invokes Google Voice Assistant (`android.intent.action.VOICE_COMMAND`) instead of displaying the configuration screen.
-- **Modular 4-Step Setup Wizard**: Jetpack Compose and Material 3 interface guides users through setup step-by-step:
-  1. **Google App Check**: Verifies if Google App (`com.google.android.googlequicksearchbox`) is installed, with direct Google Play Store redirection if missing.
-  2. **On-Device ADB Granting**: Uses `dadb` to request and grant `WRITE_SECURE_SETTINGS` locally over ADB without needing a computer, complete with retry logic and connection timeouts.
-  3. **Voice Assistant Configuration**: Configures required system secure settings keys with one tap.
-  4. **Launcher Test**: Includes a direct test button to verify intent execution.
-- **Auto-Refresh Lifecycle Observer**: Automatically re-checks permission and package states whenever `MainActivity` resumes (e.g. after installing Google App or altering system settings).
-- **Manual ADB Support**: Displays exact `adb` shell commands with a one-click **Copy Command** button as a fallback method.
-- **Boot Persistence**: A background broadcast receiver (`BootReceiver`) re-applies voice assistant settings whenever the device reboots.
+Launcher shortcuts directly to your preferred AI voice assistant (Google Assistant, ChatGPT, Perplexity, Claude, etc.), provides **always-listening offline hotword / wake-word detection** ("Hey Rio", "Alexa", "Snowboy", or custom trained models), and includes a modern onboarding wizard to configure system-level voice interaction services with ease.
 
 ---
 
-## Architecture and Flow
+## Key Features
+
+- **One-Tap Voice Launcher**:
+  - Launching the app via home launcher icon, steering wheel button, or widget immediately invokes your selected voice assistant without opening configuration screens once set up.
+  - Custom launch profiles:
+    - **Google App / Google Assistant**: Executes `android.intent.action.VOICE_COMMAND`.
+    - **ChatGPT**: Direct intent target to ChatGPT's voice assistant mode (`com.openai.voice.assistant.AssistantActivity`).
+    - **Other AI / Voice Interaction Services**: Dispatches standard `Intent.ACTION_ASSIST`.
+  - Optional audible start chime ("ding") confirmation sound upon activation.
+
+- **Offline Hotword & Wake-Word Detection (`VoiceWakeService`)**:
+  - Continuous, low-latency wake-word detection powered by embedded Snowboy engine.
+  - Ships with bundled offline models: **Hey Rio** (`hey_rio.pmdl`), **Alexa** (`alexa.pmdl`), and **Snowboy** (`snowboy.pmdl`).
+  - Configurable microphone input gain and detection sensitivity sliders.
+  - Runs efficiently as a foreground service with a persistent notification and quick-access settings.
+
+- **In-App Custom Wake-Word Trainer**:
+  - Built-in training studio powered by Snowboy Seasalt API.
+  - Record voice samples directly on the head unit / device (minimum 3 samples).
+  - Train custom `.pmdl` wake-word models on the fly.
+
+- **Guided Jetpack Compose Onboarding Wizard (`PermissionOnboardingActivity`)**:
+  - Interactive status check and setup workflow for all required capabilities:
+    1. **Microphone Access**: Grants audio capture for hotword detection.
+    2. **Display Over Other Apps**: Allows launching the assistant UI seamlessly over active apps (e.g. navigation / media).
+    3. **Auto-Start & Battery Management**: Native handling for BYD DiLink (`BYD_APPSTARTMANAGEMENT`) and standard Android battery optimization bypass.
+    4. **Write Secure Settings**: Automatic on-device grant via local ADB socket (`dadb`) or manual ADB command copy.
+    5. **Target AI Assistant Selection**: Scans installed `VoiceInteractionService` providers and allows 1-tap switching.
+    6. **Notification Permission**: Enables background status indication (Android 13+).
+
+- **Boot Persistence**:
+  - `BootReceiver` captures `BOOT_COMPLETED` to re-apply `Settings.Secure` assistant keys and initialize the voice wake service on startup.
+
+---
+
+## Architecture & Flow
 
 ```
-                        +---------------------------+
-                        |   User Launches App       |
-                        +-------------+-------------+
-                                      |
-                                      v
-                        +---------------------------+
-                        |       StartActivity       |
-                        +-------------+-------------+
-                                      |
-             Are WRITE_SECURE_SETTINGS Granted,
-             Voice Assistant Enabled, AND Google App Installed?
-                               /             \
-                             YES              NO
-                             /                 \
-                            v                   v
-        +-----------------------+   +-----------------------+
-        | Trigger Voice Command |   |   Open MainActivity   |
-        | (Google Assistant)    |   |  (4-Step Setup Guide) |
-        +-----------------------+   +-----------------------+
+                             +---------------------------+
+                             |   User Launches App       |
+                             |   or Wake Word Detected   |
+                             +-------------+-------------+
+                                           |
+                                           v
+                             +---------------------------+
+                             |       StartActivity       |
+                             +-------------+-------------+
+                                           |
+                               Is Setup Fully Completed?
+                      (Secure Settings, Audio, Assistant App,
+                         Auto-Start, Overlay Permissions)
+                                    /             \
+                                  YES              NO
+                                  /                 \
+                                 v                   v
+             +-----------------------+   +--------------------------------+
+             | Trigger Voice Command |   | PermissionOnboardingActivity   |
+             |  - Google Assistant   |   |   (Setup Wizard)    |
+             |  - ChatGPT Voice      |   +--------------------------------+
+             |  - Custom Assist App  |
+             +-----------------------+
 ```
-
-1. **StartActivity**: Entry point registered for the launcher icon (`SplashActivity.kt`).
-   - Checks whether `WRITE_SECURE_SETTINGS` is granted, Google Assistant service is active, and Google App is installed.
-   - If fully configured, it fires `android.intent.action.VOICE_COMMAND` directed at `com.google.android.googlequicksearchbox` and exits immediately.
-   - If any requirement is missing, it routes the user to `MainActivity`.
-2. **MainActivity**: Step-by-step configuration dashboard (`MainActivity.kt`).
-   - Displays modular `StepCard` UI components with completion indicators, descriptions, and active status tracking.
-   - Handles auto-refreshing setup states on lifecycle `ON_RESUME`.
-3. **BootReceiver**: Catches `Intent.ACTION_BOOT_COMPLETED` events to ensure secure settings persist across device reboots (`receiver/BootReceiver.kt`).
 
 ---
 
 ## Secure Settings
 
-The application modifies the following `Settings.Secure` system keys to register Google Assistant:
+To designate the default voice interaction provider system-wide, the app configures the following `Settings.Secure` keys:
 
-| Key | Value |
+| Key | Description / Example Value |
 | :--- | :--- |
-| `assistant` | `com.google.android.googlequicksearchbox/com.google.android.voiceinteraction.GsaVoiceInteractionService` |
-| `voice_interaction_service` | `com.google.android.googlequicksearchbox/com.google.android.voiceinteraction.GsaVoiceInteractionService` |
+| `assistant` | Flattened component name (e.g., `com.google.android.googlequicksearchbox/com.google.android.voiceinteraction.GsaVoiceInteractionService`) |
+| `voice_interaction_service` | Flattened component name (e.g., `com.google.android.googlequicksearchbox/com.google.android.voiceinteraction.GsaVoiceInteractionService`) |
 
 ---
 
-## Requirements and Setup
+## Setup & Permissions
 
-### Prerequisites
-- Android 7.0 (API level 24) or higher.
-- Google App (`com.google.android.googlequicksearchbox`) installed on the target device.
+### Granting `WRITE_SECURE_SETTINGS`
 
-### Setup Guide (In-App Wizard)
+Modifying system assistant keys requires the `android.permission.WRITE_SECURE_SETTINGS` permission.
 
-1. **Step 1: Google App Check**
-   - Verify that Google App is installed. If missing, tap **Install Google App** to open Play Store.
-2. **Step 2: Grant Secure Settings Permission**
-   - Tap **Permission: Next** to automatically grant `WRITE_SECURE_SETTINGS` via local `dadb`.
-   - *Fallback*: If auto-grant fails, copy the provided `adb shell pm grant` command and execute it via PC or Wireless ADB.
-3. **Step 3: Configure Voice Assistant Service**
-   - Tap **Enable Voice Assistant** to set `GsaVoiceInteractionService` in `Settings.Secure`.
-4. **Step 4: Test Voice Assistant Launcher**
-   - Tap **Test Voice Assistant** to execute a voice command intent.
-5. **Auto-Start**:
-   - On head units (e.g. BYD DiLink), ensure Auto-start is allowed for Google App, Gemini (if used), and Assistant.
+#### Method 1: Automatic In-App Grant (Local ADB)
+1. Open the app onboarding screen.
+2. Under **Write Secure Settings**, tap **Grant via Local ADB**.
+3. The app connects to the local ADB daemon via `dadb` and grants the permission automatically without needing a computer.
 
----
-
-## Granting Secure Settings Permission
-
-Modifying assistant settings requires `android.permission.WRITE_SECURE_SETTINGS`.
-
-### Method 1: In-App Automatic Grant (dadb)
-1. Open the application (`MainActivity`).
-2. Tap **Permission: Next** in Step 2. The app will attempt local ADB connection via `dadb` (with built-in retry mechanism and 10-second timeout) and grant the permission automatically.
-
-### Method 2: Manual ADB Command
-If automatic ADB discovery fails or local ADB socket access is disabled on the head unit, execute the following command via PC or Wireless ADB:
+#### Method 2: Manual ADB Command
+If local ADB discovery is unavailable, execute the following command via PC or Wireless ADB:
 
 ```bash
 adb shell pm grant com.kangrio.byd.assistant android.permission.WRITE_SECURE_SETTINGS
 ```
 
-Then return to the app and proceed to **Step 3: Enable Voice Assistant**.
-
 ---
 
-## Repository Structure
+## Project Structure
 
 ```
 Assistant/
@@ -116,14 +111,38 @@ Assistant/
 │   └── src/
 │       └── main/
 │           ├── AndroidManifest.xml
-│           └── java/com/kangrio/byd/assistant/
-│               ├── MainActivity.kt          # 4-Step setup UI & Compose dashboard
-│               ├── SplashActivity.kt        # Entry point (StartActivity / launcher handler)
-│               ├── receiver/
-│               │   └── BootReceiver.kt      # Re-applies settings after boot
-│               ├── ui/theme/                # Material 3 theme styling
-│               └── util/
-│                   └── Utils.kt    # Dadb helper, store intent, & secure settings
+│           ├── assets/
+│           │   └── snowboy/              # Pretrained models (.pmdl) & resources
+│           │       ├── common.res
+│           │       └── models/
+│           │           ├── alexa.pmdl
+│           │           ├── hey_rio.pmdl
+│           │           └── snowboy.pmdl
+│           ├── java/com/kangrio/byd/assistant/
+│           │   ├── App.kt                # Application entry point
+│           │   ├── Constant.kt           # Shared constants & preference keys
+│           │   ├── StartActivity.kt      # Fast launcher & voice intent dispatcher
+│           │   ├── activity/
+│           │   │   ├── PermissionOnboardingActivity.kt # Guided onboarding host
+│           │   │   └── SettingsActivity.kt             # Hotword settings & voice trainer
+│           │   ├── data/
+│           │   │   └── AssistantApp.kt   # Assistant metadata model
+│           │   ├── receiver/
+│           │   │   └── BootReceiver.kt   # Restores settings & service on boot
+│           │   ├── service/
+│           │   │   ├── SnowboyDetector.kt# Audio recorder & Snowboy JNI bridge
+│           │   │   └── VoiceWakeService.kt # Foreground service for wake word
+│           │   ├── ui/
+│           │   │   ├── composable/       # Shared UI components & app icons
+│           │   │   ├── onboarding/       # Onboarding wizard screens & permission cards
+│           │   │   └── theme/            # Material 3 theme & typography
+│           │   └── util/
+│           │       ├── Preferences.kt    # SharedPreferences wrapper
+│           │       ├── SnowboyTrainClient.kt # API client for custom model training
+│           │       └── Utils.kt          # System helpers, dadb runner & intent utilities
+│           └── res/
+│               └── raw/
+│                   └── ding.mp3          # Activation chime
 ├── build.gradle.kts
 └── settings.gradle.kts
 ```
@@ -133,8 +152,9 @@ Assistant/
 ## Building from Source
 
 ### Requirements
-- Android Studio Ladybug or JDK 11+
-- Gradle 8.x
+- Android Studio
+- Android SDK (API 37 compile target, `minSdk` 24)
+- Supported ABIs: `armeabi-v7a`, `arm64-v8a`, `x86_64`
 
 ### Build Commands
 
@@ -144,22 +164,31 @@ Assistant/
 
 # Build Release APK
 ./gradlew assembleRelease
+
+# Build Beta Variant
+./gradlew assembleBeta
 ```
 
-Build outputs are saved to `app/build/outputs/apk/<variant>/` using the following naming convention:
+Artifacts will be generated in `app/build/outputs/apk/<variant>/` following the naming format:
 `Assistant-<versionName>(<versionCode>)-<variant>-<timestamp>.apk`
 
 ---
 
-## Permissions
+## Permissions Overview
 
-- `android.permission.WRITE_SECURE_SETTINGS`: Required to switch system voice interaction services.
-- `android.permission.RECEIVE_BOOT_COMPLETED`: Used to restore settings on boot.
-- `android.permission.INTERNET`: Used by `dadb` to communicate with the local ADB daemon.
-- `android.permission.POST_NOTIFICATIONS`: For system notifications.
+| Permission | Purpose |
+| :--- | :--- |
+| `RECORD_AUDIO` | Required for wake-word listening and voice sample recording. |
+| `FOREGROUND_SERVICE` / `FOREGROUND_SERVICE_MICROPHONE` | Keeps the hotword detector running reliably in the background. |
+| `SYSTEM_ALERT_WINDOW` | Enables launching assistant interfaces over active apps. |
+| `WRITE_SECURE_SETTINGS` | Configures system default assistant and voice interaction services. |
+| `RECEIVE_BOOT_COMPLETED` | Automatically restarts hotword service and secures settings on device boot. |
+| `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` | Prevents Android OS from killing background services in standby. |
+| `POST_NOTIFICATIONS` | Displays the foreground service notification on Android 13+. |
+| `INTERNET` | Used for local ADB loopback socket communication and wake-word model training. |
 
 ---
 
 ## License
 
-Distributed under the MIT License.
+Distributed under the [MIT License](LICENSE).
