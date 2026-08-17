@@ -2,6 +2,7 @@ package com.kangrio.byd.assistant.util
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -12,7 +13,6 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.service.voice.VoiceInteractionService
 import android.util.Log
-import android.widget.Toast
 import dadb.Dadb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -24,6 +24,7 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.kangrio.byd.assistant.Constant
 import com.kangrio.byd.assistant.R
+import com.kangrio.byd.assistant.StartActivity
 import com.kangrio.byd.assistant.data.AssistantApp
 
 object Utils {
@@ -119,6 +120,15 @@ object Utils {
 
     fun startVoiceAssistant(context: Context) {
         try {
+            if (context !is Activity) {
+                context.startActivity(
+                    Intent(context, StartActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                )
+                return
+            }
+
             val assistantApp = getCurrentAssistantApp(context)
             val packageName = assistantApp.packageName
             val intent = Intent(Intent.ACTION_ASSIST).apply {
