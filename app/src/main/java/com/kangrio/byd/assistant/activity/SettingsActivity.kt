@@ -559,7 +559,10 @@ fun SettingsScreen(
                 Text("Select Assistant App")
             },
             text = {
-                Column {
+                Column(
+                    modifier = Modifier
+                        .verticalScroll(rememberScrollState())
+                ) {
                     assistantApps.forEach { assistant ->
                         Row(
                             modifier = Modifier
