@@ -8,6 +8,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
+val runNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orElse("0")
+
 android {
     namespace = "com.kangrio.byd.assistant"
     compileSdk {
@@ -18,8 +20,11 @@ android {
         applicationId = "com.kangrio.byd.assistant"
         minSdk = 24
         targetSdk = 37
-        versionCode = 2
-        versionName = "1.0.1"
+        versionCode = 3
+        versionName = "1.0.2"
+        ndk {
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+        }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -44,9 +49,16 @@ android {
             optimization {
                 enable = true
             }
-            if (file("signing.properties").exists()) {
-                signingConfig = signingConfigs.getByName("release")
+            signingConfig = if (file("signing.properties").exists()) {
+                signingConfigs.getByName("release")
+            } else {
+                signingConfigs.getByName("debug")
             }
+        }
+
+        register("beta") {
+            initWith(getByName("release"))
+            versionNameSuffix = "-beta.${runNumber.get()}"
         }
     }
     compileOptions {
@@ -55,6 +67,9 @@ android {
     }
     buildFeatures {
         compose = true
+    }
+    sourceSets["main"].apply {
+        jniLibs.srcDirs("src/main/jniLibs")
     }
 }
 
@@ -72,6 +87,10 @@ androidComponents {
 dependencies {
     implementation(libs.dadb)
     implementation(libs.androidx.compose.material.icons.extended)
+    implementation(libs.okhttp)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+    implementation(libs.accompanist.drawablepainter)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

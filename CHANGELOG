@@ -1,0 +1,9 @@
+- v1.0.2
+  • In-App Updates: Added OTA updates via GitHub Releases.
+  • Offline Wake Word: Added Snowboy hotword detection (hey_rio, alexa, snowboy) with gain and sensitivity controls.
+  • Custom Model Training: Added in-app voice sample recording and hotword training via Seasalt API.
+  • Multi-Assistant Support: Added selection support for any installed assistant app (Google, ChatGPT, Claude, Perplexity).
+  • Onboarding Wizard: Added setup screen for Mic, Overlay, Auto-Start, local ADB, and Notification permissions.
+  • Background Launch Fix: Fixed voice assistant launch issues from background service.
+  • UI & UX Polish: Added vertical scrolling to dialogs, debounce on record button, and activation chime sound.
+  • CI / Build: Added beta build workflow and bumped version to 1.0.2.
