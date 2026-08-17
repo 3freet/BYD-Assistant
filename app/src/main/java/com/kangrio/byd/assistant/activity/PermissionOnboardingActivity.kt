@@ -1,5 +1,6 @@
 package com.kangrio.byd.assistant.activity
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,6 +29,7 @@ class PermissionOnboardingActivity : ComponentActivity() {
         if (Utils.setupCompleted(this)) {
             Utils.startVoiceAssistant(this)
         }
+        startActivity(Intent(this, SettingsActivity::class.java))
         finish()
     }
 }
