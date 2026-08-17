@@ -11,9 +11,6 @@ import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -49,6 +46,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +69,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.seconds
 
 private const val WAKE_WORD_MODEL_NAME = "user_custom"
 private const val SEASALT_BASE_URL = "https://snowboy.jolanrensen.nl" // snowboy-seasalt host
@@ -197,10 +196,8 @@ class SettingsActivity : ComponentActivity() {
                         onPlayDingToggle = { state -> Preferences.playDingOnStart = state },
                         onSensitivityChange = { VoiceWakeService.setSensitivity(this, it) },
                         onGainChange = { VoiceWakeService.setGain(this, it) },
-                        showTrainPanel = panelOpen,
                         recordPhase = phase,
                         sampleCount = currentSamples.size,
-                        onTrainClick = { onTrainClick() },
                         onModelChanged = { model -> VoiceWakeService.setModel(this, model) },
                         onStartRecordClick = { onStartOrStopRecord(phase) },
                         onSubmitClick = { submitSamples(currentSamples) },
@@ -217,14 +214,7 @@ class SettingsActivity : ComponentActivity() {
             sampleRecorder.cancel()
             recordPhase.value = RecordPhase.Idle
         }
-        finishAffinity()
-    }
-
-    private fun onTrainClick() {
-        showTrainPanel.value = !showTrainPanel.value
-        if (showTrainPanel.value && Preferences.startHotword) {
-            Toast.makeText(this, "Recomment to disable voice detection before training", Toast.LENGTH_SHORT).show()
-        }
+        finish()
     }
 
     private fun onStartOrStopRecord(phase: RecordPhase) {
@@ -303,24 +293,26 @@ fun SettingsScreen(
     onPlayDingToggle: (Boolean) -> Unit = {},
     onSensitivityChange: (Float) -> Unit = {},
     onGainChange: (Float) -> Unit = {},
-    showTrainPanel: Boolean = false,
     recordPhase: RecordPhase = RecordPhase.Idle,
     sampleCount: Int = 0,
-    onTrainClick: () -> Unit,
     onModelChanged: (String) -> Unit = { _-> },
     onStartRecordClick: () -> Unit = {},
     onSubmitClick: () -> Unit = {},
     onNewClick: () -> Unit = {},
 ) {
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
     val outline = MaterialTheme.colorScheme.outlineVariant
 
     var showAssistantDialog by remember { mutableStateOf(false) }
+    var showAssistantPermissionsDialog by remember { mutableStateOf(false) }
     var assistantApps by remember {
         mutableStateOf(Utils.listAssistantPackages(context))
     }
+    var selectedAssistantApp by remember { mutableStateOf(Utils.getCurrentAssistantApp(context)) }
+
     var isWriteSecureSettingsGranted by remember { mutableStateOf(Utils.isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)) }
 
     var expandedModels by remember { mutableStateOf(false) }
@@ -363,7 +355,6 @@ fun SettingsScreen(
                     .fillMaxWidth()
                     .padding(top = 20.dp)
                     .weight(1f)
-                    .border(1.dp, outline, RoundedCornerShape(20.dp))
                     .verticalScroll(rememberScrollState()),
             ) {
                 SettingRow(
@@ -392,44 +383,26 @@ fun SettingsScreen(
                                 showAssistantDialog = true
                             }
                         ) {
-                            Text(Utils.getCurrentAssistantApp(context).name)
+                            Text(selectedAssistantApp.name)
                         }
                 }
-
-                if (showAssistantDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showAssistantDialog = false },
-                        title = {
-                            Text("Select Assistant App")
-                        },
-                        text = {
-                            Column {
-                                assistantApps.forEach { assistant ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                showAssistantDialog = false
-                                                Utils.enableVoiceAssistant(context, assistant.componentName)
-                                                Preferences.assistantPackageComponent = assistant.componentName
-                                            }
-                                            .padding(vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        AppIcon(
-                                            packageName = assistant.packageName,
-                                            modifier = Modifier.size(40.dp)
-                                        )
-
-                                        Spacer(Modifier.width(12.dp))
-
-                                        Text(assistant.name)
-                                    }
+                if (Utils.getNotificationListenerComponentName(context, selectedAssistantApp.packageName) != null) {
+                    SettingRow(
+                        label = "Assistant Permissions",
+                        description = "Give the assistant app required permissions."
+                    ) {
+                        FilledTonalButton(
+                            onClick = {
+                                if (!isWriteSecureSettingsGranted) {
+                                    Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
+                                    return@FilledTonalButton
                                 }
+                                showAssistantPermissionsDialog = true
                             }
-                        },
-                        confirmButton = {}
-                    )
+                        ) {
+                            Text("Grant")
+                        }
+                    }
                 }
 
                 SettingRow(
@@ -535,12 +508,6 @@ fun SettingsScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
 
-                        Button(
-                            modifier = Modifier.padding(end = 12.dp),
-                            onClick = onTrainClick
-                        ) {
-                            Text("Train")
-                        }
                         Box {
                             FilledTonalButton(
                                 onClick = { expandedModels = true }
@@ -567,27 +534,112 @@ fun SettingsScreen(
                     }
                 }
 
-                AnimatedVisibility(
-                    visible = showTrainPanel,
-                    enter = expandVertically(),
-                    exit = shrinkVertically()
-                ) {
-                    RecordPanel(
-                        phase = recordPhase,
-                        sampleCount = sampleCount,
-                        onStartRecordClick = onStartRecordClick,
-                        onSubmitClick = {
-                            selectedModel = "user_custom"
-                            onSubmitClick()
-                        },
-                        onNewClick = onNewClick,
-                    )
-                }
+                RecordPanel(
+                    phase = recordPhase,
+                    sampleCount = sampleCount,
+                    onStartRecordClick = onStartRecordClick,
+                    onSubmitClick = {
+                        onSubmitClick()
+                        selectedModel = WAKE_WORD_MODEL_NAME
+                    },
+                    onNewClick = onNewClick,
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             TitlePill(text = "Created by @KangRio")
+        }
+    }
+
+    if (showAssistantDialog) {
+        AlertDialog(
+            onDismissRequest = { showAssistantDialog = false },
+            title = {
+                Text("Select Assistant App")
+            },
+            text = {
+                Column {
+                    assistantApps.forEach { assistant ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showAssistantDialog = false
+                                    Utils.enableVoiceAssistant(context, assistant.componentName)
+                                    Preferences.assistantPackageComponent = assistant.componentName
+                                    selectedAssistantApp = assistant
+                                }
+                                .padding(vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            AppIcon(
+                                packageName = assistant.packageName,
+                                modifier = Modifier.size(40.dp)
+                            )
+
+                            Spacer(Modifier.width(12.dp))
+
+                            Text(assistant.name)
+                        }
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    if (showAssistantPermissionsDialog) {
+        var componentName by remember { mutableStateOf(Utils.getNotificationListenerComponentName(context, selectedAssistantApp.packageName)) }
+        if (componentName != null) {
+            AlertDialog(
+                onDismissRequest = { showAssistantPermissionsDialog = false },
+                title = {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        AppIcon(
+                            packageName = selectedAssistantApp.packageName,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text("Grant Assistant Permissions")
+                    }
+                },
+                text = {
+                    Column {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    showAssistantPermissionsDialog = false
+                                }
+                                .padding(vertical = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            var granted by remember { mutableStateOf(Utils.isNotificationListenerEnabled(context, selectedAssistantApp.packageName)) }
+                            Text("Notification Listener")
+                            Switch(
+                                checked = granted,
+                                onCheckedChange = {
+                                    scope.launch {
+                                        if (it) {
+                                            Utils.grantNotificationListener(context, selectedAssistantApp.packageName)
+                                            delay(1000.milliseconds)
+                                            granted = Utils.isNotificationListenerEnabled(context, selectedAssistantApp.packageName)
+                                        }
+                                    }
+                                }
+                            )
+                        }
+                    }
+                },
+                confirmButton = {}
+            )
+        } else {
+            showAssistantPermissionsDialog = false
+            Toast.makeText(context, "No need to grant permissions", Toast.LENGTH_SHORT).show()
         }
     }
 }
@@ -600,10 +652,13 @@ private fun RecordPanel(
     onSubmitClick: () -> Unit,
     onNewClick: () -> Unit,
 ) {
+    val scope = rememberCoroutineScope()
     val isRecording = phase is RecordPhase.Recording
     val isUploading = phase is RecordPhase.Uploading
     val isTrained = phase is RecordPhase.Trained
     val isBusy = isRecording || isUploading
+
+    var recordText by remember { mutableStateOf("Start") }
 
     Column(
         modifier = Modifier
@@ -624,14 +679,29 @@ private fun RecordPanel(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Button(
-                onClick = onStartRecordClick,
-                enabled = !isUploading && !isTrained
+                onClick = {
+                    scope.launch {
+                        var timer = 2
+                        repeat(timer) {
+                            recordText = "Wait ${timer - it}..."
+                            delay(1.seconds)
+                        }
+
+                        onStartRecordClick()
+
+                        timer = 3
+                        repeat(timer) {
+                            recordText = "Recording ${timer - it}..."
+                            delay(1.seconds)
+                        }
+
+                        onStartRecordClick()
+                        recordText = "Start"
+                    }
+                },
+                enabled = !isUploading && !isTrained && !isRecording
             ) {
-                if (isRecording) {
-                    Text("Stop")
-                } else {
-                    Text("Start record")
-                }
+                Text(recordText)
             }
 
             FilledTonalButton(
@@ -657,7 +727,7 @@ private fun RecordPanel(
 
 private fun statusText(phase: RecordPhase, sampleCount: Int): String = when (phase) {
     RecordPhase.Idle -> "$sampleCount / $MIN_SAMPLES samples recorded"
-    RecordPhase.Recording -> "Recording... tap Stop when done"
+    RecordPhase.Recording -> "Recording... speak your word"
     RecordPhase.Uploading -> "Uploading and training..."
     is RecordPhase.Trained -> "Model trained — tap New to record again"
     is RecordPhase.Failure -> "Failed: ${phase.message}"
@@ -712,14 +782,11 @@ private fun SettingRow(
 @Composable
 private fun SettingsScreenPreview() {
     var stateOn by remember { mutableStateOf(true) }
-    var panelOpen by remember { mutableStateOf(true) }
 
     MaterialTheme {
         SettingsScreen(
             onStateToggle = { stateOn = it },
-            showTrainPanel = panelOpen,
             sampleCount = 2,
-            onTrainClick = { panelOpen = !panelOpen }
         )
     }
 }

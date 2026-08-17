@@ -8,11 +8,11 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.SoundPool
 import android.os.Build
-import android.os.Bundle
 import android.os.PowerManager
 import android.provider.Settings
 import android.service.voice.VoiceInteractionService
 import android.util.Log
+import android.widget.Toast
 import dadb.Dadb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -145,27 +145,61 @@ object Utils {
         }
     }
 
+    fun getNotificationListenerComponentName(context: Context, packageName: String): ComponentName? {
+        val intent = Intent("android.service.notification.NotificationListenerService").apply {
+            setPackage(packageName)
+        }
+        val resolveInfos = context.packageManager.queryIntentServices(intent, 0)
+        if (resolveInfos.isEmpty()) return null
+        val serviceInfo = resolveInfos[0].serviceInfo
+        return ComponentName(serviceInfo.packageName, serviceInfo.name)
+    }
+
+    fun isNotificationListenerEnabled(context: Context, packageName: String): Boolean {
+        val notificationListeners = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
+        val components = notificationListeners?.split(":") ?: emptyList()
+        return components.any { ComponentName.unflattenFromString(it)?.packageName == packageName }
+    }
+
+    suspend fun grantNotificationListener(context: Context, packageName: String): Boolean =
+        withContext(Dispatchers.IO) {
+            if (!isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)) return@withContext false
+
+            val componentName =
+                getNotificationListenerComponentName(context, packageName)?.flattenToString()
+                    ?: return@withContext false
+
+            adbShell(context, "cmd notification allow_listener $componentName")
+            return@withContext isNotificationListenerEnabled(context, packageName)
+        }
+
     private fun putSecureSetting(context: Context, key: String, value: String?) {
         Settings.Secure.putString(context.contentResolver, key, value)
     }
 
-    suspend fun adbRequestPermission(context: Context, permission: String) =
+    suspend fun adbShell(context: Context, cmd: String) =
         withContext(Dispatchers.IO) {
             setupUserHome(context)
             withTimeoutOrNull(10_000L.milliseconds) {
                 while (isActive) {
                     try {
                         val dAdb = Dadb.discover(connectTimeout = 5000, socketTimeout = 5000) ?: run {
-                            Log.e("PermissionUtil", "No device found")
+                            Log.e("Utils", "No device found")
                             return@withTimeoutOrNull null
                         }
-                        dAdb.shell("pm grant ${context.packageName} $permission")
+                        dAdb.shell(cmd)
                         return@withTimeoutOrNull null
                     } catch (e: Throwable) {
                         delay(100L.milliseconds)
                     }
                 }
             }
+        }
+
+    suspend fun adbRequestPermission(context: Context, permission: String) =
+        withContext(Dispatchers.IO) {
+            setupUserHome(context)
+            adbShell(context, "pm grant ${context.packageName} $permission")
         }
 
     private fun setupUserHome(context: Context) {
