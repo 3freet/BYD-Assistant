@@ -662,6 +662,7 @@ private fun RecordPanel(
     val isBusy = isRecording || isUploading
 
     var recordText by remember { mutableStateOf("Start") }
+    var isWaiting by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -684,6 +685,7 @@ private fun RecordPanel(
             Button(
                 onClick = {
                     scope.launch {
+                        isWaiting = true
                         var timer = 2
                         repeat(timer) {
                             recordText = "Wait ${timer - it}..."
@@ -700,9 +702,10 @@ private fun RecordPanel(
 
                         onStartRecordClick()
                         recordText = "Start"
+                        isWaiting = false
                     }
                 },
-                enabled = !isUploading && !isTrained && !isRecording
+                enabled = !isWaiting && !isUploading && !isTrained && !isRecording
             ) {
                 Text(recordText)
             }
