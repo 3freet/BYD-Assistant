@@ -8,7 +8,21 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val runNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orElse("0")
+val appVersionCode = 4
+val appVersionName = "1.0.3"
+
+val betaTags = providers.provider {
+    providers.exec {
+        commandLine("git", "tag", "-l", "v${appVersionName}-beta.*")
+    }.standardOutput.asText.get().trim()
+}
+val betaNumber = betaTags.map { tags ->
+    tags.lineSequence()
+        .mapNotNull { it.substringAfter("-beta.").toIntOrNull() }
+        .maxOrNull()
+        ?.plus(1)
+        ?: 1
+}
 
 android {
     namespace = "com.kangrio.byd.assistant"
@@ -20,8 +34,8 @@ android {
         applicationId = "com.kangrio.byd.assistant"
         minSdk = 24
         targetSdk = 37
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = appVersionCode
+        versionName = appVersionName
         ndk {
             abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
         }
@@ -58,7 +72,7 @@ android {
 
         register("beta") {
             initWith(getByName("release"))
-            versionNameSuffix = "-beta.${runNumber.get()}"
+            versionNameSuffix = "-beta.${betaNumber.get()}"
         }
     }
     compileOptions {
