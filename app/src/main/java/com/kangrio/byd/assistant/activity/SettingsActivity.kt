@@ -452,7 +452,7 @@ fun SettingsScreen(
 
                 SettingRow(
                     label = "Play Sound",
-                    description = "Play a sound when voice detection starts."
+                    description = "Play a sound when the voice assistant launches."
                 ) {
                     Switch(
                         checked = isPlayDing,
