@@ -240,7 +240,12 @@ object Utils {
     }
 
     fun isDilink(): Boolean {
-        return Build.FINGERPRINT.contains("dilink", true)
+        return listOf(
+            Build.BRAND,
+            Build.FINGERPRINT,
+            Build.MODEL,
+            Build.PRODUCT
+        ).any { it.contains("dilink", ignoreCase = true) }
     }
 
     // use last update time instead
