@@ -160,7 +160,17 @@ class SettingsActivity : ComponentActivity() {
     private var samples = mutableStateOf<List<File>>(emptyList())
     private var initialOtaRelease = mutableStateOf<ReleaseInfo?>(null)
 
-    private val requestMicPermission = registerForActivityResult(
+    private val requestMicPermissionWakeWord = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            VoiceWakeService.setState(this, true)
+        } else {
+            Toast.makeText(this, "Microphone permission is required for wake word detection", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private val requestMicPermissionTrain = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) beginRecording() else {
@@ -214,7 +224,7 @@ class SettingsActivity : ComponentActivity() {
                     SettingsScreen(
                         modifier = Modifier.padding(paddingValues),
                         initialOtaRelease = otaRelease,
-                        onStateToggle = { state -> VoiceWakeService.setState(this, state) },
+                        onStateToggle = { state -> onStateToggle(state) },
                         onPlayDingToggle = { state -> Preferences.playDingOnStart = state },
                         onSensitivityChange = { VoiceWakeService.setSensitivity(this, it) },
                         onGainChange = { VoiceWakeService.setGain(this, it) },
@@ -239,6 +249,24 @@ class SettingsActivity : ComponentActivity() {
         finish()
     }
 
+    private fun onStateToggle(state: Boolean) {
+        if (!state) {
+            VoiceWakeService.setState(this, false)
+            return
+        }
+
+        val hasPermission = ContextCompat.checkSelfPermission(
+            this,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+
+        if (hasPermission) {
+            VoiceWakeService.setState(this, true)
+        } else {
+            requestMicPermissionWakeWord.launch(Manifest.permission.RECORD_AUDIO)
+        }
+    }
+
     private fun onStartOrStopRecord(phase: RecordPhase) {
         if (phase is RecordPhase.Recording) {
             val file = sampleRecorder.stop()
@@ -255,7 +283,7 @@ class SettingsActivity : ComponentActivity() {
             this, Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
 
-        if (hasPermission) beginRecording() else requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)
+        if (hasPermission) beginRecording() else requestMicPermissionTrain.launch(Manifest.permission.RECORD_AUDIO)
     }
 
     private fun beginRecording() {
