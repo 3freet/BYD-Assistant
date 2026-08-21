@@ -152,7 +152,7 @@ fun PermissionOnboardingScreen(
     ) { granted ->
         isMicGranted = granted
         if (!granted) {
-            Toast.makeText(context, "Microphone permission is required for voice commands", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Microphone permission is recommended for voice commands", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -201,7 +201,7 @@ fun PermissionOnboardingScreen(
                 detailedReason = "Without microphone access, hotword detection ('Hey Rio') and voice command recognition cannot operate.",
                 icon = Icons.Default.Mic,
                 isGranted = isMicGranted,
-                isRequired = true,
+                isRequired = false,
                 actionText = if (isMicGranted) "Granted" else "Grant Microphone Access",
                 onAction = {
                     micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -315,8 +315,8 @@ fun PermissionOnboardingScreen(
         list
     }
 
-    val totalPermissions = permissionItems.size
-    val grantedCount = permissionItems.count { it.isGranted }
+    val totalPermissions = permissionItems.filter { it.isRequired }.size
+    val grantedCount = permissionItems.count { it.isRequired && it.isGranted }
     val progress = if (totalPermissions > 0) grantedCount.toFloat() / totalPermissions.toFloat() else 0f
     val isAllGranted = grantedCount == totalPermissions
 
@@ -693,6 +693,7 @@ fun WizardView(
 
             if (validIndex < items.size - 1) {
                 Button(
+                    enabled = !item.isRequired || item.isGranted,
                     onClick = { onStepChange(validIndex + 1) }
                 ) {
                     Text("Next")

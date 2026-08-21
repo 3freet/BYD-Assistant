@@ -98,11 +98,10 @@ object Utils {
 
     fun setupCompleted(context: Context): Boolean {
         val isGrantedWriteSecureSettings = isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
-        val isGrantedVoicePermission = isGranted(context, Manifest.permission.RECORD_AUDIO)
         val isEnableVoiceAssistant = isEnabledVoiceAssistant(context)
         val isAssistantAppsInstalled = listAssistantPackages(context).isNotEmpty()
         val isAutoStart = isGrantedAutoStart(context)
-        return isGrantedWriteSecureSettings && isGrantedVoicePermission && isEnableVoiceAssistant && isAssistantAppsInstalled && isAutoStart
+        return isGrantedWriteSecureSettings && isEnableVoiceAssistant && isAssistantAppsInstalled && isAutoStart
     }
 
     private fun playDing(context: Context) {

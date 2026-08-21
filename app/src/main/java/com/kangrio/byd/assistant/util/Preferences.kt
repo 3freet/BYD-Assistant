@@ -16,7 +16,7 @@ object Preferences {
         set(value) = prefs.edit { putString(Constant.PREFS_ASSISTANT_PACKAGE_COMPONENT, value) }
 
     var startHotword: Boolean
-        get() = prefs.getBoolean(Constant.PREFS_START_HOTWORD, true)
+        get() = prefs.getBoolean(Constant.PREFS_START_HOTWORD, false)
         set(value) = prefs.edit { putBoolean(Constant.PREFS_START_HOTWORD, value) }
 
     var hotwordModelName: String

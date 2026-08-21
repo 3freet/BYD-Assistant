@@ -362,6 +362,7 @@ fun SettingsScreen(
     LaunchedEffect(lifecycleOwner) {
         while (true) {
             isWriteSecureSettingsGranted = Utils.isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
+            isStateOn = VoiceWakeService.isWakeWordStarted
             delay(1_000L.milliseconds)
         }
     }

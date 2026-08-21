@@ -124,6 +124,10 @@ class VoiceWakeService : Service() {
     }
 
     fun startHotwordDetection() {
+        if (!Utils.isGranted(this, android.Manifest.permission.RECORD_AUDIO)) {
+            showToast("""Please grant the microphone permission to start hotword detection.""")
+            return
+        }
         if (!Utils.setupCompleted(this@VoiceWakeService) || !Preferences.startHotword) return
 
         val modelName = Preferences.hotwordModelName
@@ -138,12 +142,14 @@ class VoiceWakeService : Service() {
         }
 
         detector?.start()
+        isWakeWordStarted = true
         showToast("""Hotword Detection Started""")
     }
 
     fun stopHotwordDetection() {
         detector?.stop()
         detector = null
+        isWakeWordStarted = false
         showToast("""Hotword Detection Stopped""")
     }
 
@@ -217,6 +223,8 @@ class VoiceWakeService : Service() {
         private const val CHANNEL_ID = "voice_assistant"
         private const val NOTIFICATION_ID = 1001
         private var isStarted = false
+        var isWakeWordStarted = false
+            private set
 
         const val START_HOTWORD_DETECTION =
             "com.kangrio.byd.assistant.action.START_HOTWORD_DETECTION"
