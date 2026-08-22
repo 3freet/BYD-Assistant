@@ -15,7 +15,6 @@ import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.kangrio.byd.assistant.R
-import com.kangrio.byd.assistant.StartActivity
 import com.kangrio.byd.assistant.activity.SettingsActivity
 import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.Utils
@@ -25,7 +24,9 @@ import kotlinx.coroutines.SupervisorJob
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import com.kangrio.byd.assistant.ota.OtaUpdater
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 class VoiceWakeService : Service() {
     private var detector: SnowboyDetector? = null
@@ -100,26 +101,23 @@ class VoiceWakeService : Service() {
     }
 
     fun setSensitivity(sensitivity: Float) {
-        Preferences.hotwordSensitivity = sensitivity
-        stopHotwordDetection()
         scope.launch {
-            startHotwordDetection()
+            Preferences.hotwordSensitivity = sensitivity
+            restartHotwordDetection()
         }
     }
 
     fun setGain(gain: Float) {
-        Preferences.hotwordGain = gain
-        stopHotwordDetection()
         scope.launch {
-            startHotwordDetection()
+            Preferences.hotwordGain = gain
+            restartHotwordDetection()
         }
     }
 
     fun setModel(modelName: String) {
-        stopHotwordDetection()
-        Preferences.hotwordModelName = modelName
         scope.launch {
-            startHotwordDetection()
+            Preferences.hotwordModelName = modelName
+            restartHotwordDetection()
         }
     }
 
@@ -151,6 +149,12 @@ class VoiceWakeService : Service() {
         detector = null
         isWakeWordStarted = false
         showToast("""Hotword Detection Stopped""")
+    }
+
+    suspend fun restartHotwordDetection() {
+        stopHotwordDetection()
+        delay(100.milliseconds)
+        startHotwordDetection()
     }
 
     private fun onHeyRioDetected() {
