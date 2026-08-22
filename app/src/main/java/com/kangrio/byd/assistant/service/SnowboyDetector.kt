@@ -77,7 +77,7 @@ class SnowboyDetector(
             assetFile("snowboy/common.res"),
             modelPath
         ).apply {
-            SetSensitivity(sensitivity.toString())
+            SetSensitivity("%.2f".format(sensitivity))
             SetAudioGain(audioGain)
             ApplyFrontend(true)
         }
