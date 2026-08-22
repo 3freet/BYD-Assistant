@@ -26,7 +26,6 @@ class SnowboyDetector(
     private var audioRecord: AudioRecord? = null
     private var audx: Audx? = null
     private val running = AtomicBoolean(false)
-    private val paused = AtomicBoolean(false)
 
     private var thread: Thread? = null
 
@@ -66,9 +65,17 @@ class SnowboyDetector(
             SAMPLE_RATE / 2
         )
 
+        val modelPath = getModelPath(modelName)
+        val modelFile = File(modelPath)
+        if (!modelFile.exists() || modelFile.length() == 0L) {
+            Log.e("SnowboyDetector", "Model file not found or empty: $modelPath — detection aborted")
+            running.set(false)
+            return
+        }
+
         detector = SnowboyDetect(
             assetFile("snowboy/common.res"),
-            getModelPath(modelName)
+            modelPath
         ).apply {
             SetSensitivity(sensitivity.toString())
             SetAudioGain(audioGain)
@@ -104,13 +111,18 @@ class SnowboyDetector(
         try {
             while (running.get()) {
 
+                if(isPaused()) {
+                    Thread.sleep(100)
+                    continue
+                }
+
                 val count = audioRecord?.read(
                     buffer,
                     0,
                     buffer.size
                 ) ?: break
 
-                if (count <= 0 || paused.get()) {
+                if (count <= 0) {
                     continue
                 }
 
@@ -129,7 +141,7 @@ class SnowboyDetector(
         val output = ShortArray(length)
 
         audx?.process(input, output) { vadProbability ->
-            if (vadProbability > 0.2) {
+            if (vadProbability > 0.5) {
                 Log.d("Audx", "VAD=$vadProbability")
                 val result = detector?.RunDetection(output, length) ?: 0
                 if (result > 0) {
@@ -140,17 +152,17 @@ class SnowboyDetector(
     }
 
     fun pause() {
-        paused.set(true)
+        audioRecord?.stop()
     }
 
     fun resume() {
         if (!running.get()) return
 
-        paused.set(false)
+        audioRecord?.startRecording()
     }
 
     fun isPaused(): Boolean {
-        return paused.get()
+        return audioRecord?.recordingState == AudioRecord.RECORDSTATE_STOPPED
     }
 
     fun stop() {

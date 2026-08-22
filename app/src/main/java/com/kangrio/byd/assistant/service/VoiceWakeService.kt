@@ -33,6 +33,7 @@ class VoiceWakeService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val handler = Handler(Looper.getMainLooper())
     lateinit var toast: Toast
+    private var lastDetectionTime = 0L
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent?) {
@@ -128,6 +129,8 @@ class VoiceWakeService : Service() {
         }
         if (!Utils.setupCompleted(this@VoiceWakeService) || !Preferences.startHotword) return
 
+        lastDetectionTime = 0L
+
         val modelName = Preferences.hotwordModelName
         detector?.stop()
         detector = SnowboyDetector(
@@ -158,8 +161,23 @@ class VoiceWakeService : Service() {
     }
 
     private fun onHeyRioDetected() {
+        val now = System.currentTimeMillis()
+        if (now - lastDetectionTime < DETECTION_COOLDOWN_MS) {
+            Log.d("VoiceWakeService", "Detection ignored — still in cooldown")
+            return
+        }
+        lastDetectionTime = now
+
+        detector?.pause()
+
         scope.launch(Dispatchers.Main) {
             Utils.startVoiceAssistant(this@VoiceWakeService)
+        }
+
+        scope.launch {
+            delay(DETECTION_COOLDOWN_MS.milliseconds)
+            detector?.resume()
+            Log.d("VoiceWakeService", "Detection resumed after cooldown")
         }
     }
 
@@ -226,6 +244,7 @@ class VoiceWakeService : Service() {
     companion object {
         private const val CHANNEL_ID = "voice_assistant"
         private const val NOTIFICATION_ID = 1001
+        private const val DETECTION_COOLDOWN_MS = 5_000L
         private var isStarted = false
         var isWakeWordStarted = false
             private set
