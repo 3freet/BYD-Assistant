@@ -118,7 +118,7 @@ object Utils {
      * Check if all required permissions are granted.
      */
     fun setupCompleted(context: Context): Boolean {
-        val isGrantedWriteSecureSettings = isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
+        val isGrantedWriteSecureSettings = !isDilink() || isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
         val isEnableVoiceAssistant = isEnabledVoiceAssistant(context)
         val isAssistantAppsInstalled = listAssistantPackages(context).isNotEmpty()
         val isAutoStart = isGrantedAutoStart(context)
@@ -223,6 +223,8 @@ object Utils {
      * Put a secure setting.
      */
     private fun putSecureSetting(context: Context, key: String, value: String?) {
+        if (!isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)) return
+
         Settings.Secure.putString(context.contentResolver, key, value)
     }
 

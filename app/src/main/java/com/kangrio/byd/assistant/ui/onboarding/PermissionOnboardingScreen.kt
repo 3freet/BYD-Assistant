@@ -254,7 +254,7 @@ fun PermissionOnboardingScreen(
                 detailedReason = "Android requires WRITE_SECURE_SETTINGS permission to set system voice keys. Grantable automatically via local ADB socket or command.",
                 icon = Icons.Default.Security,
                 isGranted = isWriteSecureSettingsGranted,
-                isRequired = true,
+                isRequired = Utils.isDilink(),
                 manualAdbCommand = "adb shell pm grant ${context.packageName} ${Manifest.permission.WRITE_SECURE_SETTINGS}",
                 actionText = if (isWriteSecureSettingsGranted) "Permission Granted" else "Grant via Local ADB",
                 onAction = {
@@ -280,7 +280,7 @@ fun PermissionOnboardingScreen(
                 actionText = if (selectedAssistant.name.isNotEmpty()) "Selected: ${selectedAssistant.name}" else "Select Assistant App",
                 onAction = {
                     if (assistantApps.isNotEmpty()) {
-                        if (!isWriteSecureSettingsGranted) {
+                        if (!isWriteSecureSettingsGranted && Utils.isDilink()) {
                             Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
                             return@OnboardingPermissionItem
                         }

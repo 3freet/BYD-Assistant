@@ -13,7 +13,6 @@ class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         OtaUpdater.checkUpdateInBackground(context, force = false)
-        if (!Utils.isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)) return
         Utils.enableVoiceAssistant(context, Preferences.assistantPackageComponent)
         VoiceWakeService.startService(context)
     }
