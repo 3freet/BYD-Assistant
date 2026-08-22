@@ -34,10 +34,16 @@ object Utils {
 
     private var dingSound: Int = -1
 
+    /**
+     * Check if a permission is granted.
+     */
     fun isGranted(context: Context, permission: String): Boolean {
         return context.checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED
     }
 
+    /**
+     * Set default voice assistant app to be used.
+     */
     fun enableVoiceAssistant(context: Context, componentName: String? = null) {
         val componentName = componentName ?: return
 
@@ -48,6 +54,9 @@ object Utils {
         putSecureSetting(context, "voice_interaction_service", componentName)
     }
 
+    /**
+     * List all installed voice assistant apps with support for VoiceInteractionService.
+     */
     fun listAssistantPackages(context: Context): List<AssistantApp> {
         val pm = context.packageManager
 
@@ -65,6 +74,9 @@ object Utils {
         }
     }
 
+    /**
+     * Check if a package has support for VoiceInteractionService.
+     */
     fun isSupportAssistService(context: Context, packageName: String): Boolean {
         val pm = context.packageManager
         val intent = Intent(VoiceInteractionService.SERVICE_INTERFACE)
@@ -72,6 +84,9 @@ object Utils {
         return pm.queryIntentServices(intent, 0).isNotEmpty()
     }
 
+    /**
+     * Get the currently selected voice assistant app.
+     */
     fun getCurrentAssistantApp(context: Context): AssistantApp {
         val assistant = Settings.Secure.getString(context.contentResolver, "assistant") ?: return AssistantApp()
 
@@ -88,6 +103,9 @@ object Utils {
         return assistantApp
     }
 
+    /**
+     * Check if voice assistant is enabled.
+     */
     fun isEnabledVoiceAssistant(context: Context): Boolean {
         val assistant = Settings.Secure.getString(context.contentResolver, "assistant")
         val voiceInteractionService =
@@ -96,6 +114,9 @@ object Utils {
         return !assistant.isNullOrEmpty() && !voiceInteractionService.isNullOrEmpty()
     }
 
+    /**
+     * Check if all required permissions are granted.
+     */
     fun setupCompleted(context: Context): Boolean {
         val isGrantedWriteSecureSettings = isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
         val isEnableVoiceAssistant = isEnabledVoiceAssistant(context)
@@ -104,6 +125,9 @@ object Utils {
         return isGrantedWriteSecureSettings && isEnableVoiceAssistant && isAssistantAppsInstalled && isAutoStart
     }
 
+    /**
+     * Play a ding sound when Voice Assistant app is launched.
+     */
     private fun playDing(context: Context) {
         if (!Preferences.playDingOnStart) return
 
@@ -117,6 +141,9 @@ object Utils {
         }
     }
 
+    /**
+     * Launch the currently selected voice assistant app.
+     */
     fun startVoiceAssistant(context: Context) {
         try {
             // Redirect through StartActivity when called from a non-Activity context
@@ -155,6 +182,9 @@ object Utils {
         }
     }
 
+    /**
+     * Get the Notification Listener component name for a given package name.
+     */
     fun getNotificationListenerComponentName(context: Context, packageName: String): ComponentName? {
         val intent = Intent("android.service.notification.NotificationListenerService").apply {
             setPackage(packageName)
@@ -165,12 +195,18 @@ object Utils {
         return ComponentName(serviceInfo.packageName, serviceInfo.name)
     }
 
+    /**
+     * Check if the Notification Listener service is enabled for a given package name.
+     */
     fun isNotificationListenerEnabled(context: Context, packageName: String): Boolean {
         val notificationListeners = Settings.Secure.getString(context.contentResolver, "enabled_notification_listeners")
         val components = notificationListeners?.split(":") ?: emptyList()
         return components.any { ComponentName.unflattenFromString(it)?.packageName == packageName }
     }
 
+    /**
+     * Grant the Notification Listener service permission for a given package name via ADB.
+     */
     suspend fun grantNotificationListener(context: Context, packageName: String): Boolean =
         withContext(Dispatchers.IO) {
             if (!isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)) return@withContext false
@@ -183,10 +219,16 @@ object Utils {
             return@withContext isNotificationListenerEnabled(context, packageName)
         }
 
+    /**
+     * Put a secure setting.
+     */
     private fun putSecureSetting(context: Context, key: String, value: String?) {
         Settings.Secure.putString(context.contentResolver, key, value)
     }
 
+    /**
+     * Run a shell command via ADB.
+     */
     suspend fun adbShell(context: Context, cmd: String) =
         withContext(Dispatchers.IO) {
             setupUserHome(context)
@@ -208,12 +250,18 @@ object Utils {
             }
         }
 
+    /**
+     * Request a permission via ADB.
+     */
     suspend fun adbRequestPermission(context: Context, permission: String) =
         withContext(Dispatchers.IO) {
             setupUserHome(context)
             adbShell(context, "pm grant ${context.packageName} $permission")
         }
 
+    /**
+     * setup user home when it is empty required by DAdb library.
+     */
     private fun setupUserHome(context: Context) {
         val userHome = System.getProperty("user.home") ?: ""
         if (userHome.isEmpty()) {
@@ -222,6 +270,9 @@ object Utils {
         }
     }
 
+    /**
+     * Open the Google Play Store to install the app.
+     */
     fun openStore(context: Context) {
         try {
             val intent = Intent(
@@ -240,6 +291,9 @@ object Utils {
         }
     }
 
+    /**
+     * Check if the device is a Dilink device.
+     */
     fun isDilink(): Boolean {
         return listOf(
             Build.BRAND,
@@ -249,7 +303,10 @@ object Utils {
         ).any { it.contains("dilink", ignoreCase = true) }
     }
 
-    // use last update time instead
+    /**
+     * Check if the app is granted auto-start permission.
+     * for dilink device, use last update time instead
+     */
     fun isGrantedAutoStart(context: Context): Boolean {
         if (!isDilink()) {
             val power = context.getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -262,6 +319,10 @@ object Utils {
         return lastUpdateTime > currentUpdateTime
     }
 
+    /**
+     * Open the auto-start settings for the device.
+     * for none dilink device, use ignore battery optimization instead
+     */
     @SuppressLint("BatteryLife")
     fun openAutoStartSettings(context: Context) = runCatching {
         if (!isDilink()) {
@@ -277,6 +338,9 @@ object Utils {
         context.startActivity(intent)
     }
 
+    /**
+     * Mark the last auto-start update time.
+     */
     fun markAutoStartTime(context: Context) {
         val prefs = context.getSharedPreferences(context.packageName, Context.MODE_PRIVATE)
         prefs.edit {
