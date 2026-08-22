@@ -6,6 +6,8 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import ai.kitt.snowboy.SnowboyDetect
+import android.util.Log
+import com.audx.android.Audx
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.atomic.AtomicBoolean
@@ -22,7 +24,7 @@ class SnowboyDetector(
     private val modelsPath = "snowboy/models"
     private var detector: SnowboyDetect? = null
     private var audioRecord: AudioRecord? = null
-
+    private var audx: Audx? = null
     private val running = AtomicBoolean(false)
     private val paused = AtomicBoolean(false)
 
@@ -49,14 +51,10 @@ class SnowboyDetector(
     fun start() {
         if (!running.compareAndSet(false, true)) return
 
-        val sampleRate = 16000
-        val channelConfig = AudioFormat.CHANNEL_IN_MONO
-        val audioFormat = AudioFormat.ENCODING_PCM_16BIT
-
         val bufferSize = AudioRecord.getMinBufferSize(
-            sampleRate,
-            channelConfig,
-            audioFormat
+            SAMPLE_RATE,
+            CHANEL_CONFIG,
+            AUDIO_FORMAT
         )
 
         require(bufferSize > 0) {
@@ -65,7 +63,7 @@ class SnowboyDetector(
 
         val recordBufferSize = maxOf(
             bufferSize,
-            sampleRate / 2
+            SAMPLE_RATE / 2
         )
 
         detector = SnowboyDetect(
@@ -77,36 +75,27 @@ class SnowboyDetector(
             ApplyFrontend(true)
         }
 
+        audx = Audx.Builder()
+            .inputRate(SAMPLE_RATE)
+            .resampleQuality(Audx.AUDX_RESAMPLER_QUALITY_VOIP)
+            .build()
+
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.MIC,
-            sampleRate,
-            channelConfig,
-            audioFormat,
+            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            SAMPLE_RATE,
+            CHANEL_CONFIG,
+            AUDIO_FORMAT,
             recordBufferSize
         )
 
         audioRecord?.startRecording()
 
         thread = Thread {
-            detectionLoop(recordBufferSize / 2)
+            detectionLoop(CHUNK_SIZE)
         }.apply {
             name = "SnowboyDetector"
             start()
         }
-    }
-
-    fun pause() {
-        paused.set(true)
-    }
-
-    fun resume() {
-        if (!running.get()) return
-
-        paused.set(false)
-    }
-
-    fun isPaused(): Boolean {
-        return paused.get()
     }
 
     private fun detectionLoop(bufferSize: Int) {
@@ -125,18 +114,43 @@ class SnowboyDetector(
                     continue
                 }
 
-                val result = detector?.RunDetection(
-                    buffer,
-                    count
-                ) ?: break
-
-                if (result > 0) {
-                    onDetected()
-                }
+                processAudioChunk(buffer, count)
             }
         } finally {
             stopInternal()
         }
+    }
+
+    private fun processAudioChunk(
+        audioData: ShortArray,
+        length: Int
+    ) {
+        val input = audioData.copyOf(length)
+        val output = ShortArray(length)
+
+        audx?.process(input, output) { vadProbability ->
+            if (vadProbability > 0.2) {
+                Log.d("Audx", "VAD=$vadProbability")
+                val result = detector?.RunDetection(input, length) ?: 0
+                if (result > 0) {
+                    onDetected()
+                }
+            }
+        }
+    }
+
+    fun pause() {
+        paused.set(true)
+    }
+
+    fun resume() {
+        if (!running.get()) return
+
+        paused.set(false)
+    }
+
+    fun isPaused(): Boolean {
+        return paused.get()
     }
 
     fun stop() {
@@ -152,12 +166,17 @@ class SnowboyDetector(
             audioRecord?.stop()
         } catch (_: Exception) {
         }
+        try {
+            audx?.close()
+        } catch (_: Exception) {
+        }
 
         try {
             audioRecord?.release()
         } catch (_: Exception) {
         }
 
+        audx = null
         audioRecord = null
 
         detector?.delete()
@@ -190,5 +209,12 @@ class SnowboyDetector(
         }
 
         return file.absolutePath
+    }
+
+    companion object {
+        const val SAMPLE_RATE = 16000
+        private const val CHUNK_SIZE = SAMPLE_RATE / 50
+        const val CHANEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
+        const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     }
 }
