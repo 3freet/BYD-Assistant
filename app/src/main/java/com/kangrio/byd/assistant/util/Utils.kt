@@ -119,6 +119,7 @@ object Utils {
 
     fun startVoiceAssistant(context: Context) {
         try {
+            // Redirect through StartActivity when called from a non-Activity context
             if (context !is Activity) {
                 context.startActivity(
                     Intent(context, StartActivity::class.java).apply {
