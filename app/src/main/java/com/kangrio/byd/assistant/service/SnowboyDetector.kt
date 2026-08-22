@@ -131,7 +131,7 @@ class SnowboyDetector(
         audx?.process(input, output) { vadProbability ->
             if (vadProbability > 0.2) {
                 Log.d("Audx", "VAD=$vadProbability")
-                val result = detector?.RunDetection(input, length) ?: 0
+                val result = detector?.RunDetection(output, length) ?: 0
                 if (result > 0) {
                     onDetected()
                 }
@@ -156,9 +156,9 @@ class SnowboyDetector(
     fun stop() {
         if (!running.getAndSet(false)) return
 
-        thread?.interrupt()
-
-        stopInternal()
+        val t = thread
+        t?.interrupt()
+        t?.join()
     }
 
     private fun stopInternal() {
