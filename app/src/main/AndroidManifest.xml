@@ -45,12 +45,14 @@
         <activity
             android:name=".activity.SettingsActivity"
             android:excludeFromRecents="true"
+            android:configChanges="orientation"
             android:exported="false"/>
 
         <activity
             android:name=".activity.PermissionOnboardingActivity"
             android:excludeFromRecents="true"
             android:exported="false"
+            android:configChanges="orientation"
             android:theme="@style/Theme.Assistant" />
 
         <receiver
