@@ -303,7 +303,7 @@ fun PermissionOnboardingScreen(
                     detailedReason = "Android 13+ requires notification permission for foreground services with microphone access.",
                     icon = Icons.Default.Notifications,
                     isGranted = isNotificationGranted,
-                    isRequired = false,
+                    isRequired = true,
                     actionText = if (isNotificationGranted) "Granted" else "Allow Notifications",
                     onAction = {
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
