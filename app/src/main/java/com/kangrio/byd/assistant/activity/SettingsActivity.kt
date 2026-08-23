@@ -108,7 +108,7 @@ private class SampleRecorder(
         }
 
         newRecorder.apply {
-            setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+            setAudioSource(MediaRecorder.AudioSource.DEFAULT)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             setOutputFile(file.absolutePath)
@@ -945,11 +945,7 @@ private fun statusText(phase: RecordPhase, sampleCount: Int): String = when (pha
 /** All AudioSource values exposed to the user, ordered by typical usefulness. */
 private val AUDIO_SOURCE_OPTIONS: List<Pair<String, Int>> = listOf(
     "Default"             to MediaRecorder.AudioSource.DEFAULT,
-    "Mic"                 to MediaRecorder.AudioSource.MIC,
-    "Voice Recognition"   to MediaRecorder.AudioSource.VOICE_RECOGNITION,
-    "Voice Communication" to MediaRecorder.AudioSource.VOICE_COMMUNICATION,
-    "Camcorder"           to MediaRecorder.AudioSource.CAMCORDER,
-    "Unprocessed"         to MediaRecorder.AudioSource.UNPROCESSED
+    "Mic"                 to MediaRecorder.AudioSource.MIC
 )
 
 private fun audioSourceLabel(source: Int): String =

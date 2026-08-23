@@ -18,7 +18,7 @@ class SnowboyDetector(
     private val modelName: String = "hey_rio",
     private val sensitivity: Float = 0.5f,
     private val audioGain: Float = 1.0f,
-    private val audioSource: Int = MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+    private val audioSource: Int = MediaRecorder.AudioSource.DEFAULT,
     private val onDetected: () -> Unit
 ) {
 
@@ -137,20 +137,10 @@ class SnowboyDetector(
         }
     }
 
-    /**
-     * Reduces the gain of the input buffer by half (50%).
-     */
-    fun reduceGain(buffer: ShortArray, length: Int) {
-        for (i in 0 until length) {
-            buffer[i] = (buffer[i].toInt() shr 1).toShort()
-        }
-    }
-
     private fun processAudioChunk(
         audioData: ShortArray,
         output: ShortArray
     ) {
-        reduceGain(audioData, audioData.size)
         audx?.process(audioData, output) { vadProbability ->
             if (vadProbability > 0.5) {
                 Log.d("SnowboyDetector", "VAD=$vadProbability")
