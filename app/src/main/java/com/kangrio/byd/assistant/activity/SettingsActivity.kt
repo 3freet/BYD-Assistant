@@ -483,8 +483,8 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
-                    label = "Voice Detection",
-                    description = "Enable or disable wake-word detection."
+                    label = "Voice Detection (Experimental)",
+                    description = "Enable wake-word detection. False triggers may occur."
                 ) {
                     Switch(
                         checked = isStateOn,
