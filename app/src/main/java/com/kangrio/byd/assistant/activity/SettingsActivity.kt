@@ -382,7 +382,7 @@ fun SettingsScreen(
     var isDownloadingUpdate by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
 
-    val models = remember(selectedModel) {
+    val models = remember(expandedModels) {
         context.filesDir.resolve("snowboy/models")
             .listFiles()
             ?.filter { it.isFile && it.extension.equals("pmdl", ignoreCase = true) }
@@ -642,7 +642,7 @@ fun SettingsScreen(
 
                         Box {
                             FilledTonalButton(
-                                onClick = { expandedModels = true }
+                                onClick = { expandedModels = !expandedModels }
                             ) {
                                 Text(selectedModel)
                             }
