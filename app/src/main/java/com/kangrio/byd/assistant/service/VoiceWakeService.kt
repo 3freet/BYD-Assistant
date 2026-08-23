@@ -169,7 +169,7 @@ class VoiceWakeService : Service() {
 
     suspend fun restartHotwordDetection() {
         stopHotwordDetection()
-        delay(100.milliseconds)
+        delay(1000.milliseconds)
         startHotwordDetection()
     }
 
