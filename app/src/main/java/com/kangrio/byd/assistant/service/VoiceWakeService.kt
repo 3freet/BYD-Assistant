@@ -86,6 +86,11 @@ class VoiceWakeService : Service() {
                 val gain = intent.extras?.getFloat("gain") ?: return START_STICKY
                 setGain(gain)
             }
+
+            SET_AUDIO_SOURCE -> {
+                val source = intent.extras?.getInt("audioSource") ?: return START_STICKY
+                setAudioSource(source)
+            }
         }
 
         return START_STICKY
@@ -115,6 +120,13 @@ class VoiceWakeService : Service() {
         }
     }
 
+    fun setAudioSource(source: Int) {
+        scope.launch {
+            Preferences.audioSource = source
+            restartHotwordDetection()
+        }
+    }
+
     fun setModel(modelName: String) {
         scope.launch {
             Preferences.hotwordModelName = modelName
@@ -138,6 +150,7 @@ class VoiceWakeService : Service() {
             modelName = modelName,
             sensitivity = Preferences.hotwordSensitivity,
             audioGain = Preferences.hotwordGain,
+            audioSource = Preferences.audioSource,
         ) {
             onHeyRioDetected()
         }
@@ -255,6 +268,7 @@ class VoiceWakeService : Service() {
         const val SET_MODEL = "com.kangrio.byd.assistant.action.SET_MODEL"
         const val SET_SENSITIVITY = "com.kangrio.byd.assistant.action.SET_SENSITIVITY"
         const val SET_GAIN = "com.kangrio.byd.assistant.action.SET_GAIN"
+        const val SET_AUDIO_SOURCE = "com.kangrio.byd.assistant.action.SET_AUDIO_SOURCE"
 
         fun startService(context: Context) {
             if (isStarted || !Utils.setupCompleted(context)) return
@@ -295,6 +309,14 @@ class VoiceWakeService : Service() {
             val intent = Intent(context, VoiceWakeService::class.java).apply {
                 action = SET_GAIN
                 putExtra("gain", gain)
+            }
+            context.startService(intent)
+        }
+
+        fun setAudioSource(context: Context, source: Int) {
+            val intent = Intent(context, VoiceWakeService::class.java).apply {
+                action = SET_AUDIO_SOURCE
+                putExtra("audioSource", source)
             }
             context.startService(intent)
         }

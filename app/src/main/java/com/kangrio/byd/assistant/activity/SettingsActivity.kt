@@ -373,6 +373,8 @@ fun SettingsScreen(
     var isPlayDing by remember { mutableStateOf(Preferences.playDingOnStart) }
     var sensitivity by remember { mutableFloatStateOf(Preferences.hotwordSensitivity) }
     var gain by remember { mutableFloatStateOf(Preferences.hotwordGain) }
+    var expandedAudioSource by remember { mutableStateOf(false) }
+    var selectedAudioSource by remember { mutableStateOf(Preferences.audioSource) }
 
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var availableUpdate by remember { mutableStateOf<ReleaseInfo?>(initialOtaRelease) }
@@ -464,6 +466,23 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
+                    label = "Play Sound",
+                    description = "Play a sound when the voice assistant launches."
+                ) {
+                    Switch(
+                        checked = isPlayDing,
+                        onCheckedChange = {
+                            isPlayDing = it
+                            onPlayDingToggle(it)
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription =
+                                "Play ding toggle, ${if (isPlayDing) "on" else "off"}"
+                        }
+                    )
+                }
+
+                SettingRow(
                     label = "Voice Detection",
                     description = "Enable or disable wake-word detection."
                 ) {
@@ -480,20 +499,29 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
-                    label = "Play Sound",
-                    description = "Play a sound when the voice assistant launches."
+                    label = "Audio Source",
+                    description = "AudioRecord input source for wake-word detection."
                 ) {
-                    Switch(
-                        checked = isPlayDing,
-                        onCheckedChange = {
-                            isPlayDing = it
-                            onPlayDingToggle(it)
-                        },
-                        modifier = Modifier.semantics {
-                            contentDescription =
-                                "Play ding toggle, ${if (isPlayDing) "on" else "off"}"
+                    Box {
+                        FilledTonalButton(onClick = { expandedAudioSource = true }) {
+                            Text(audioSourceLabel(selectedAudioSource))
                         }
-                    )
+                        DropdownMenu(
+                            expanded = expandedAudioSource,
+                            onDismissRequest = { expandedAudioSource = false }
+                        ) {
+                            AUDIO_SOURCE_OPTIONS.forEach { (label, source) ->
+                                DropdownMenuItem(
+                                    text = { Text(label) },
+                                    onClick = {
+                                        selectedAudioSource = source
+                                        expandedAudioSource = false
+                                        VoiceWakeService.setAudioSource(context, source)
+                                    }
+                                )
+                            }
+                        }
+                    }
                 }
 
                 SettingRow(
@@ -913,6 +941,19 @@ private fun statusText(phase: RecordPhase, sampleCount: Int): String = when (pha
     is RecordPhase.Trained -> "Model trained — tap New to record again"
     is RecordPhase.Failure -> "Failed: ${phase.message}"
 }
+
+/** All AudioSource values exposed to the user, ordered by typical usefulness. */
+private val AUDIO_SOURCE_OPTIONS: List<Pair<String, Int>> = listOf(
+    "Default"             to MediaRecorder.AudioSource.DEFAULT,
+    "Mic"                 to MediaRecorder.AudioSource.MIC,
+    "Voice Recognition"   to MediaRecorder.AudioSource.VOICE_RECOGNITION,
+    "Voice Communication" to MediaRecorder.AudioSource.VOICE_COMMUNICATION,
+    "Camcorder"           to MediaRecorder.AudioSource.CAMCORDER,
+    "Unprocessed"         to MediaRecorder.AudioSource.UNPROCESSED
+)
+
+private fun audioSourceLabel(source: Int): String =
+    AUDIO_SOURCE_OPTIONS.firstOrNull { it.second == source }?.first ?: "Source $source"
 
 @Composable
 private fun TitlePill(text: String, modifier: Modifier = Modifier) {

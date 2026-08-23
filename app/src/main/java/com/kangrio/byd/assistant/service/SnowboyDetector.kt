@@ -18,6 +18,7 @@ class SnowboyDetector(
     private val modelName: String = "hey_rio",
     private val sensitivity: Float = 0.5f,
     private val audioGain: Float = 1.0f,
+    private val audioSource: Int = MediaRecorder.AudioSource.VOICE_RECOGNITION,
     private val onDetected: () -> Unit
 ) {
 
@@ -88,7 +89,7 @@ class SnowboyDetector(
             .build()
 
         audioRecord = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION,
+            audioSource,
             SAMPLE_RATE,
             CHANEL_CONFIG,
             AUDIO_FORMAT,
