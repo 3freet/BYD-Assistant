@@ -4,10 +4,13 @@ on:
   push:
     branches:
       - dev
+  workflow_dispatch:
 
 jobs:
   build:
-    if: startsWith(github.event.head_commit.message, 'beta:')
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.event.head_commit.message, 'beta:')
 
     runs-on: ubuntu-latest
 
