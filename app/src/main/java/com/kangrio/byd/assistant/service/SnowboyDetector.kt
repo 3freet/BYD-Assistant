@@ -137,12 +137,11 @@ class SnowboyDetector(
         audioData: ShortArray,
         length: Int
     ) {
-        val input = audioData.copyOf(length)
         val output = ShortArray(length)
 
-        audx?.process(input, output) { vadProbability ->
+        audx?.process(audioData, output) { vadProbability ->
             if (vadProbability > 0.5) {
-                Log.d("Audx", "VAD=$vadProbability")
+                Log.d("SnowboyDetector", "VAD=$vadProbability")
                 val result = detector?.RunDetection(output, length) ?: 0
                 if (result > 0) {
                     onDetected()
@@ -225,7 +224,7 @@ class SnowboyDetector(
 
     companion object {
         const val SAMPLE_RATE = 16000
-        private const val CHUNK_SIZE = SAMPLE_RATE / 50
+        private const val CHUNK_SIZE = Audx.FRAME_SIZE
         const val CHANEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     }
