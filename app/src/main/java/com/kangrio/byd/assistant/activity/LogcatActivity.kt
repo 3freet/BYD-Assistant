@@ -51,7 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /** Maximum number of log lines kept in memory. */
-private const val MAX_LINES = 2_000
+private const val MAX_LINES = 100
 
 /** Logcat priority levels used for filtering. */
 enum class LogLevel(val tag: String, val shortTag: Char) {
@@ -121,19 +121,29 @@ fun LogcatScreen(modifier: Modifier = Modifier) {
         val job = scope.launch(Dispatchers.IO) {
             try {
                 val proc = Runtime.getRuntime().exec(
-                    arrayOf("logcat", "-v", "threadtime")
+                    arrayOf("logcat", "-T", "1", "-v", "threadtime")
                 )
                 process = proc
+
+                val batch = ArrayList<LogLine>(14)
+                var lastFlush = System.currentTimeMillis()
+
                 proc.inputStream.bufferedReader().use { reader ->
                     while (isActive) {
                         val line = reader.readLine() ?: break
                         val parsed = LogLine(raw = line, level = parseLevel(line))
+                        batch.add(parsed)
+                        val now = System.currentTimeMillis()
+                        if (batch.size < 10 || now - lastFlush < 100) continue
+
                         withContext(Dispatchers.Main) {
-                            lines.add(parsed)
+                            lines.addAll(batch)
                             if (lines.size > MAX_LINES) {
                                 lines.removeRange(0, lines.size - MAX_LINES)
                             }
                         }
+                        batch.clear()
+                        lastFlush = System.currentTimeMillis()
                     }
                 }
             } catch (_: Exception) { /* process killed on dispose */ }
