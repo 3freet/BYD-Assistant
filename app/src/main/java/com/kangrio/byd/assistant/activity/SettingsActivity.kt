@@ -555,6 +555,19 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
+                    label = "Debug Logcat",
+                    description = "View live system log output."
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            context.startActivity(Intent(context, LogcatActivity::class.java))
+                        }
+                    ) {
+                        Text("Open")
+                    }
+                }
+
+                SettingRow(
                     label = "Check for Updates",
                     description = "Current version: v${OtaUpdater.getCurrentVersionName(context)}"
                 ) {
