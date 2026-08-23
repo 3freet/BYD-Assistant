@@ -107,6 +107,7 @@ class SnowboyDetector(
 
     private fun detectionLoop(bufferSize: Int) {
         val buffer = ShortArray(bufferSize)
+        val output = ShortArray(bufferSize)
 
         try {
             while (running.get()) {
@@ -126,7 +127,7 @@ class SnowboyDetector(
                     continue
                 }
 
-                processAudioChunk(buffer, count)
+                processAudioChunk(buffer, output)
             }
         } finally {
             stopInternal()
@@ -135,14 +136,12 @@ class SnowboyDetector(
 
     private fun processAudioChunk(
         audioData: ShortArray,
-        length: Int
+        output: ShortArray
     ) {
-        val output = ShortArray(length)
-
         audx?.process(audioData, output) { vadProbability ->
             if (vadProbability > 0.5) {
                 Log.d("SnowboyDetector", "VAD=$vadProbability")
-                val result = detector?.RunDetection(output, length) ?: 0
+                val result = detector?.RunDetection(output, output.size) ?: 0
                 if (result > 0) {
                     Log.d("SnowboyDetector", "Wake word detected")
                     onDetected()
