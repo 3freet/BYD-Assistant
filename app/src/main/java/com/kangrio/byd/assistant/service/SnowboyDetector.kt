@@ -144,6 +144,7 @@ class SnowboyDetector(
                 Log.d("SnowboyDetector", "VAD=$vadProbability")
                 val result = detector?.RunDetection(output, length) ?: 0
                 if (result > 0) {
+                    Log.d("SnowboyDetector", "Wake word detected")
                     onDetected()
                 }
             }
