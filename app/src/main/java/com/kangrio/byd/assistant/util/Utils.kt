@@ -253,8 +253,10 @@ object Utils {
                 false
             }
 
-            if (result == true) {
-                Toast.makeText(context, "ADB connection failed. Please check ADB and try again.", Toast.LENGTH_SHORT).show()
+            if (result != true) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(context, "ADB connection failed. Please check ADB and try again.", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
