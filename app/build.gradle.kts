@@ -82,9 +82,6 @@ android {
     buildFeatures {
         compose = true
     }
-    sourceSets["main"].apply {
-        jniLibs.srcDirs("src/main/jniLibs")
-    }
 }
 
 androidComponents {
@@ -105,7 +102,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.accompanist.drawablepainter)
-    implementation(libs.audx)
+    implementation(libs.openwakeword)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

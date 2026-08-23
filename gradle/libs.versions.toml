@@ -38,6 +38,7 @@ dadb = { module = "dev.mobile:dadb", version.ref = "dadb" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
+openwakeword = { group = "xyz.rementia", name = "openwakeword", version = "0.1.5" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

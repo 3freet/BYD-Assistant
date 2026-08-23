@@ -29,11 +29,10 @@ import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 class VoiceWakeService : Service() {
-    private var detector: SnowboyDetector? = null
+    private var detector: OpenWakeWordDetector? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val handler = Handler(Looper.getMainLooper())
     lateinit var toast: Toast
-    private var lastDetectionTime = 0L
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent?) {
@@ -81,16 +80,6 @@ class VoiceWakeService : Service() {
                 val sensitivity = intent.extras?.getFloat("sensitivity") ?: return START_STICKY
                 setSensitivity(sensitivity)
             }
-
-            SET_GAIN -> {
-                val gain = intent.extras?.getFloat("gain") ?: return START_STICKY
-                setGain(gain)
-            }
-
-            SET_AUDIO_SOURCE -> {
-                val source = intent.extras?.getInt("audioSource") ?: return START_STICKY
-                setAudioSource(source)
-            }
         }
 
         return START_STICKY
@@ -113,20 +102,6 @@ class VoiceWakeService : Service() {
         }
     }
 
-    fun setGain(gain: Float) {
-        scope.launch {
-            Preferences.hotwordGain = gain
-            restartHotwordDetection()
-        }
-    }
-
-    fun setAudioSource(source: Int) {
-        scope.launch {
-            Preferences.audioSource = source
-            restartHotwordDetection()
-        }
-    }
-
     fun setModel(modelName: String) {
         scope.launch {
             Preferences.hotwordModelName = modelName
@@ -141,23 +116,22 @@ class VoiceWakeService : Service() {
         }
         if (!Utils.setupCompleted(this@VoiceWakeService) || !Preferences.startHotword) return
 
-        lastDetectionTime = 0L
-
         val modelName = Preferences.hotwordModelName
         detector?.stop()
-        detector = SnowboyDetector(
+        detector = OpenWakeWordDetector(
             context = this@VoiceWakeService,
             modelName = modelName,
             sensitivity = Preferences.hotwordSensitivity,
-            audioGain = Preferences.hotwordGain,
-            audioSource = Preferences.audioSource,
         ) {
-            onHeyRioDetected()
+            onWakeWordDetected()
         }
 
-        detector?.start()
-        isWakeWordStarted = true
-        showToast("""Hotword Detection Started""")
+        isWakeWordStarted = detector?.start() == true
+        if (isWakeWordStarted) {
+            showToast("""Hotword Detection Started""")
+        } else {
+            showToast("""Hotword Detection Failed""")
+        }
     }
 
     fun stopHotwordDetection() {
@@ -173,24 +147,9 @@ class VoiceWakeService : Service() {
         startHotwordDetection()
     }
 
-    private fun onHeyRioDetected() {
-        val now = System.currentTimeMillis()
-        if (now - lastDetectionTime < DETECTION_COOLDOWN_MS) {
-            Log.d("VoiceWakeService", "Detection ignored — still in cooldown")
-            return
-        }
-        lastDetectionTime = now
-
-        detector?.pause()
-
+    private fun onWakeWordDetected() {
         scope.launch(Dispatchers.Main) {
             Utils.startVoiceAssistant(this@VoiceWakeService)
-        }
-
-        scope.launch {
-            delay(DETECTION_COOLDOWN_MS.milliseconds)
-            detector?.resume()
-            Log.d("VoiceWakeService", "Detection resumed after cooldown")
         }
     }
 
@@ -257,7 +216,6 @@ class VoiceWakeService : Service() {
     companion object {
         private const val CHANNEL_ID = "voice_assistant"
         private const val NOTIFICATION_ID = 1001
-        private const val DETECTION_COOLDOWN_MS = 5_000L
         private var isStarted = false
         var isWakeWordStarted = false
             private set
@@ -267,8 +225,6 @@ class VoiceWakeService : Service() {
         const val STOP_HOTWORD_DETECTION = "com.kangrio.byd.assistant.action.STOP_HOTWORD_DETECTION"
         const val SET_MODEL = "com.kangrio.byd.assistant.action.SET_MODEL"
         const val SET_SENSITIVITY = "com.kangrio.byd.assistant.action.SET_SENSITIVITY"
-        const val SET_GAIN = "com.kangrio.byd.assistant.action.SET_GAIN"
-        const val SET_AUDIO_SOURCE = "com.kangrio.byd.assistant.action.SET_AUDIO_SOURCE"
 
         fun startService(context: Context) {
             if (isStarted || !Utils.setupCompleted(context)) return
@@ -301,22 +257,6 @@ class VoiceWakeService : Service() {
             val intent = Intent(context, VoiceWakeService::class.java).apply {
                 action = SET_SENSITIVITY
                 putExtra("sensitivity", sensitivity)
-            }
-            context.startService(intent)
-        }
-
-        fun setGain(context: Context, gain: Float) {
-            val intent = Intent(context, VoiceWakeService::class.java).apply {
-                action = SET_GAIN
-                putExtra("gain", gain)
-            }
-            context.startService(intent)
-        }
-
-        fun setAudioSource(context: Context, source: Int) {
-            val intent = Intent(context, VoiceWakeService::class.java).apply {
-                action = SET_AUDIO_SOURCE
-                putExtra("audioSource", source)
             }
             context.startService(intent)
         }

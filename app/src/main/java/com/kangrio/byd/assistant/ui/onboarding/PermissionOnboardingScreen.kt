@@ -198,7 +198,7 @@ fun PermissionOnboardingScreen(
                 title = "Microphone Access",
                 category = "Core Voice Detection",
                 description = "Allows Assistant to capture wake word detection and process speech commands.",
-                detailedReason = "Without microphone access, hotword detection ('Hey Rio') and voice command recognition cannot operate.",
+                detailedReason = "Without microphone access, hotword detection and voice command recognition cannot operate.",
                 icon = Icons.Default.Mic,
                 isGranted = isMicGranted,
                 isRequired = false,
