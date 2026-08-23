@@ -945,7 +945,8 @@ private fun statusText(phase: RecordPhase, sampleCount: Int): String = when (pha
 /** All AudioSource values exposed to the user, ordered by typical usefulness. */
 private val AUDIO_SOURCE_OPTIONS: List<Pair<String, Int>> = listOf(
     "Default"             to MediaRecorder.AudioSource.DEFAULT,
-    "Mic"                 to MediaRecorder.AudioSource.MIC
+    "Mic"                 to MediaRecorder.AudioSource.MIC,
+    "Recognize"           to MediaRecorder.AudioSource.VOICE_RECOGNITION
 )
 
 private fun audioSourceLabel(source: Int): String =
