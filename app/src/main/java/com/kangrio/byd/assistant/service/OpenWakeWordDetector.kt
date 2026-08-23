@@ -2,9 +2,7 @@ package com.kangrio.byd.assistant.service
 
 import android.content.Context
 import android.util.Log
-import com.rementia.openwakeword.lib.WakeWordEngine
-import com.rementia.openwakeword.lib.model.DetectionMode
-import com.rementia.openwakeword.lib.model.WakeWordModel
+import com.suxsem.androidwakeword.WakeWordDetector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -17,7 +15,7 @@ class OpenWakeWordDetector(
     private val onDetected: () -> Unit
 ) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var wakeWordEngine: WakeWordEngine? = null
+    private var wakeWordEngine: WakeWordDetector? = null
     private val modelsPath = "openwakeword/models"
     private val modelFile = "$modelsPath/$modelName.onnx"
 
@@ -31,41 +29,33 @@ class OpenWakeWordDetector(
             return false
         }
 
-        val models = listOf(
-            WakeWordModel(
-                name = modelName,
-                modelPath = modelFile,
-                threshold = sensitivity
-            )
-        )
-
-        val engine = WakeWordEngine(
+        log("Starting wake word engine")
+        val engine = WakeWordDetector(
             context = context,
-            models = models,
-            detectionMode = DetectionMode.SINGLE_BEST,
-            detectionCooldownMs = 5000L
+            modelFile = modelFile,
+            verifierFile = null,
+            minScore = sensitivity,
+            minVerifierScore = 0.1f, // 0 = skip
+            onDetected = { score ->
+                Log.d("WakeWord", "Detected! score=$score")
+                onDetected()
+            }
         )
         wakeWordEngine = engine
 
         scope.launch {
-            engine.detections.collect { detection ->
-                log("Wake word: \"${detection.model.name}\" (score=${String.format("%.3f", detection.score)})")
-                onDetected()
-            }
+            engine.startDetection()
         }
-
-        engine.start()
-        log("Wake word engine started (${models.first().modelPath}, threshold=${models.first().threshold})")
         return true
     }
 
     fun stop() {
         try {
-            wakeWordEngine?.stop()
+            wakeWordEngine?.pauseDetection()
         } catch (_: Exception) {
         }
         try {
-            wakeWordEngine?.release()
+            wakeWordEngine?.releaseResources()
         } catch (_: Exception) {
         }
         wakeWordEngine = null
@@ -73,11 +63,13 @@ class OpenWakeWordDetector(
     }
 
     fun pause() {
-        wakeWordEngine?.stop()
+        wakeWordEngine?.pauseDetection()
     }
 
     fun resume() {
-        wakeWordEngine?.start()
+        scope.launch {
+            wakeWordEngine?.startDetection()
+        }
     }
 
     fun log(msg: String) {
