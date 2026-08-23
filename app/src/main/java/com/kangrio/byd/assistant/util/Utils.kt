@@ -13,6 +13,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.service.voice.VoiceInteractionService
 import android.util.Log
+import android.widget.Toast
 import dadb.Dadb
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -234,7 +235,7 @@ object Utils {
     suspend fun adbShell(context: Context, cmd: String) =
         withContext(Dispatchers.IO) {
             setupUserHome(context)
-            withTimeoutOrNull(10_000L.milliseconds) {
+            val result = withTimeoutOrNull(10_000L.milliseconds) {
                 while (isActive) {
                     try {
                         var dAdb = Dadb.discover(connectTimeout = 1000, socketTimeout = 1000)
@@ -244,11 +245,16 @@ object Utils {
                         dAdb = Dadb.discover(connectTimeout = 1000, socketTimeout = 5000)
                         dAdb?.shell(cmd)
                         dAdb?.close()
-                        return@withTimeoutOrNull null
+                        return@withTimeoutOrNull true
                     } catch (e: Throwable) {
                         delay(100L.milliseconds)
                     }
                 }
+                false
+            }
+
+            if (result == true) {
+                Toast.makeText(context, "ADB connection failed. Please check ADB and try again.", Toast.LENGTH_SHORT).show()
             }
         }
 
