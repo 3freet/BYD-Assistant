@@ -130,8 +130,18 @@ class SnowboyDetector(
 
                 processAudioChunk(buffer, output)
             }
+        } catch (_: InterruptedException) {
         } finally {
             stopInternal()
+        }
+    }
+
+    /**
+     * Reduces the gain of the input buffer by half (50%).
+     */
+    fun reduceGain(buffer: ShortArray, length: Int) {
+        for (i in 0 until length) {
+            buffer[i] = (buffer[i].toInt() shr 1).toShort()
         }
     }
 
@@ -139,6 +149,7 @@ class SnowboyDetector(
         audioData: ShortArray,
         output: ShortArray
     ) {
+        reduceGain(audioData, audioData.size)
         audx?.process(audioData, output) { vadProbability ->
             if (vadProbability > 0.5) {
                 Log.d("SnowboyDetector", "VAD=$vadProbability")
@@ -168,9 +179,7 @@ class SnowboyDetector(
     fun stop() {
         if (!running.getAndSet(false)) return
 
-        val t = thread
-        t?.interrupt()
-        t?.join()
+        thread?.interrupt()
     }
 
     private fun stopInternal() {
@@ -182,18 +191,18 @@ class SnowboyDetector(
             audx?.close()
         } catch (_: Exception) {
         }
-
         try {
             audioRecord?.release()
+        } catch (_: Exception) {
+        }
+        try {
+            detector?.delete()
         } catch (_: Exception) {
         }
 
         audx = null
         audioRecord = null
-
-        detector?.delete()
         detector = null
-
         thread = null
     }
 
