@@ -128,23 +128,30 @@ fun LogcatScreen(modifier: Modifier = Modifier) {
                 val batch = ArrayList<LogLine>(14)
                 var lastFlush = System.currentTimeMillis()
 
+                suspend fun flush() {
+                    if (batch.isEmpty()) return
+
+                    withContext(Dispatchers.Main) {
+                        lines.addAll(batch)
+                        batch.clear()
+                        if (lines.size > MAX_LINES) {
+                            lines.removeRange(0, lines.size - MAX_LINES)
+                        }
+                    }
+                }
+
                 proc.inputStream.bufferedReader().use { reader ->
                     while (isActive) {
                         val line = reader.readLine() ?: break
                         val parsed = LogLine(raw = line, level = parseLevel(line))
                         batch.add(parsed)
                         val now = System.currentTimeMillis()
-                        if (batch.size < 10 || now - lastFlush < 100) continue
-
-                        withContext(Dispatchers.Main) {
-                            lines.addAll(batch)
-                            if (lines.size > MAX_LINES) {
-                                lines.removeRange(0, lines.size - MAX_LINES)
-                            }
+                        if (batch.size > 10 || now - lastFlush > 100) {
+                            flush()
+                            lastFlush = now
                         }
-                        batch.clear()
-                        lastFlush = System.currentTimeMillis()
                     }
+                    flush()
                 }
             } catch (_: Exception) { /* process killed on dispose */ }
         }
