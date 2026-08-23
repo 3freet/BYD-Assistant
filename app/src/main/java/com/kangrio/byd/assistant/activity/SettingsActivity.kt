@@ -108,7 +108,7 @@ private class SampleRecorder(
         }
 
         newRecorder.apply {
-            setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
+            setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
             setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
             setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
             setOutputFile(file.absolutePath)

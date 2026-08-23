@@ -18,7 +18,7 @@ class SnowboyDetector(
     private val modelName: String = "hey_rio",
     private val sensitivity: Float = 0.5f,
     private val audioGain: Float = 1.0f,
-    private val audioSource: Int = MediaRecorder.AudioSource.VOICE_RECOGNITION,
+    private val audioSource: Int = MediaRecorder.AudioSource.VOICE_COMMUNICATION,
     private val onDetected: () -> Unit
 ) {
 
@@ -61,9 +61,10 @@ class SnowboyDetector(
             "Unable to determine AudioRecord buffer size"
         }
 
+        // Buffer size in bytes: for 0.1 second of audio
         val recordBufferSize = maxOf(
             bufferSize,
-            SAMPLE_RATE / 2
+            (SAMPLE_RATE * 0.1 * 2).toInt()
         )
 
         val modelPath = getModelPath(modelName)
@@ -234,7 +235,7 @@ class SnowboyDetector(
 
     companion object {
         const val SAMPLE_RATE = 16000
-        private const val CHUNK_SIZE = Audx.FRAME_SIZE
+        private const val CHUNK_SIZE = 320
         const val CHANEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
     }

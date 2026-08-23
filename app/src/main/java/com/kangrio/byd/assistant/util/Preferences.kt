@@ -44,6 +44,6 @@ object Preferences {
         set(value) = prefs.edit { putString(Constant.PREFS_LATEST_OTA_VERSION, value) }
 
     var audioSource: Int
-        get() = prefs.getInt(Constant.PREFS_AUDIO_SOURCE, android.media.MediaRecorder.AudioSource.VOICE_RECOGNITION)
+        get() = prefs.getInt(Constant.PREFS_AUDIO_SOURCE, android.media.MediaRecorder.AudioSource.VOICE_COMMUNICATION)
         set(value) = prefs.edit { putInt(Constant.PREFS_AUDIO_SOURCE, value) }
 }
