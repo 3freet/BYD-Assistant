@@ -79,6 +79,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
+private var isImportingModel = false
 
 class SettingsActivity : ComponentActivity() {
 
@@ -132,9 +133,16 @@ class SettingsActivity : ComponentActivity() {
         }
     }
 
+    override fun onResume() {
+        super.onResume()
+        isImportingModel = false
+    }
+
     override fun onStop() {
         super.onStop()
-        finish()
+        if (!isImportingModel) {
+            finish()
+        }
     }
 
     private fun onStateToggle(state: Boolean) {
@@ -213,6 +221,7 @@ fun SettingsScreen(
     val importModelLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
+        isImportingModel = false
         if (uri != null) {
             scope.launch {
                 val result = WakeWordModelManager.importModelFromUri(context, uri)
@@ -417,6 +426,7 @@ fun SettingsScreen(
                 ) {
                     FilledTonalButton(
                         onClick = {
+                            isImportingModel = true
                             importModelLauncher.launch(arrayOf("*/*"))
                         }
                     ) {
