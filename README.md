@@ -193,11 +193,10 @@ Artifacts will be generated in `app/build/outputs/apk/<variant>/` following the 
 
 This project builds upon the following open-source libraries and projects:
 
-| Project                                                  | Author / Org | Description                                                                                                                                                                      |
-|:---------------------------------------------------------|:-------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [Snowboy](https://github.com/Kitt-AI/snowboy)            | Kitt-AI      | Always-on offline hotword detection engine. Powers the `VoiceWakeService` with low-latency wake-word recognition using bundled `.pmdl` models.                                   |
-| [dadb](https://github.com/mobile-dev-inc/dadb)           | mobile.dev   | A Kotlin library for communicating with Android devices over ADB directly from the device itself. Used here to automatically grant `WRITE_SECURE_SETTINGS` without needing a PC. |
-| [audx-android](https://github.com/rizukirr/audx-android) | rizukirr     | Android audio processing library providing real-time noise suppression and voice activity detection (VAD) to improve wake-word accuracy in noisy environments.                   |
+| Project                                                      | Author / Org | Description                                                                                                                                                                      |
+|:-------------------------------------------------------------|:-------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [AndroidWakeWord](https://github.com/Suxsem/AndroidWakeWord) | Suxsem       | Android library implementing openWakeWord detection using ONNX Runtime and SpeexDSP.                                                                                             |
+| [dadb](https://github.com/mobile-dev-inc/dadb)               | mobile.dev   | A Kotlin library for communicating with Android devices over ADB directly from the device itself. Used here to automatically grant `WRITE_SECURE_SETTINGS` without needing a PC. |
 
 
 ---
