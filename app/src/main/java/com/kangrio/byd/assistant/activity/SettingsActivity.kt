@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
@@ -18,26 +19,41 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import com.kangrio.byd.assistant.ota.OtaUpdater
+import com.kangrio.byd.assistant.data.OnlineWakeWordModel
 import com.kangrio.byd.assistant.data.ReleaseInfo
+import com.kangrio.byd.assistant.ota.OtaUpdater
+import com.kangrio.byd.assistant.service.VoiceWakeService
+import com.kangrio.byd.assistant.ui.composable.AppIcon
+import com.kangrio.byd.assistant.ui.theme.AssistantTheme
+import com.kangrio.byd.assistant.util.Preferences
+import com.kangrio.byd.assistant.util.Utils
+import com.kangrio.byd.assistant.util.WakeWordModelManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,14 +72,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import com.kangrio.byd.assistant.service.VoiceWakeService
-import com.kangrio.byd.assistant.ui.composable.AppIcon
-import com.kangrio.byd.assistant.ui.theme.AssistantTheme
-import com.kangrio.byd.assistant.util.Preferences
-import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 
 
@@ -174,6 +184,34 @@ fun SettingsScreen(
 
     var expandedModels by remember { mutableStateOf(false) }
     var selectedModel by remember { mutableStateOf(Preferences.hotwordModelName) }
+    var installedModels by remember {
+        mutableStateOf(WakeWordModelManager.getInstalledModels(context))
+    }
+
+    var showDownloadModelsDialog by remember { mutableStateOf(false) }
+    var onlineModels by remember { mutableStateOf<List<OnlineWakeWordModel>>(emptyList()) }
+    var isLoadingOnlineModels by remember { mutableStateOf(false) }
+    var onlineModelsError by remember { mutableStateOf<String?>(null) }
+    var downloadingModelNames by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var modelSearchQuery by remember { mutableStateOf("") }
+
+    val importModelLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val result = WakeWordModelManager.importModelFromUri(context, uri)
+                result.onSuccess { importedModelName ->
+                    installedModels = WakeWordModelManager.getInstalledModels(context)
+                    selectedModel = importedModelName
+                    onModelChanged(importedModelName)
+                    Toast.makeText(context, "Imported \"$importedModelName\" successfully", Toast.LENGTH_SHORT).show()
+                }.onFailure { err ->
+                    Toast.makeText(context, err.message ?: "Failed to import model", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
 
     var expandedSensitivity by remember { mutableStateOf(false) }
     var selectedSensitivityLevel by remember { mutableStateOf(SENSITIVITY_OPTIONS.firstOrNull { (_, s) -> s == Preferences.hotwordSensitivity }?.first ?: "" ) }
@@ -186,14 +224,6 @@ fun SettingsScreen(
     var showUpdateDialog by remember { mutableStateOf(initialOtaRelease != null) }
     var isDownloadingUpdate by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
-
-    val models = remember(expandedModels) {
-        File(context.filesDir, "openwakeword/models")
-            .listFiles()
-            ?.filter { file -> file.isFile && file.name.endsWith(".onnx") }
-            ?.map { file -> file.name.removeSuffix(".onnx") }
-            ?: emptyList()
-    }
 
     LaunchedEffect(lifecycleOwner) {
         while (true) {
@@ -310,7 +340,10 @@ fun SettingsScreen(
                 ) {
                     Box {
                         FilledTonalButton(
-                            onClick = { expandedModels = !expandedModels }
+                            onClick = {
+                                installedModels = WakeWordModelManager.getInstalledModels(context)
+                                expandedModels = !expandedModels
+                            }
                         ) {
                             Text(selectedModel)
                         }
@@ -319,7 +352,7 @@ fun SettingsScreen(
                             expanded = expandedModels,
                             onDismissRequest = { expandedModels = false }
                         ) {
-                            models.forEach { model ->
+                            installedModels.forEach { model ->
                                 DropdownMenuItem(
                                     text = { Text(model) },
                                     onClick = {
@@ -330,6 +363,45 @@ fun SettingsScreen(
                                 )
                             }
                         }
+                    }
+                }
+
+                SettingRow(
+                    label = "Import Model",
+                    description = "Import .onnx wake word model from storage."
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            importModelLauncher.launch(arrayOf("*/*"))
+                        }
+                    ) {
+                        Text("Import")
+                    }
+                }
+
+                SettingRow(
+                    label = "Download Wake Words",
+                    description = "Download models from Home Assistant collection."
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            showDownloadModelsDialog = true
+                            if (onlineModels.isEmpty()) {
+                                isLoadingOnlineModels = true
+                                onlineModelsError = null
+                                scope.launch {
+                                    try {
+                                        onlineModels = WakeWordModelManager.fetchOnlineModels(context)
+                                    } catch (e: Throwable) {
+                                        onlineModelsError = e.message ?: "Failed to load models from GitHub"
+                                    } finally {
+                                        isLoadingOnlineModels = false
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Explore")
                     }
                 }
 
@@ -575,6 +647,189 @@ fun SettingsScreen(
                     OutlinedButton(onClick = { showUpdateDialog = false }) {
                         Text("Later")
                     }
+                }
+            }
+        )
+    }
+
+    if (showDownloadModelsDialog) {
+        val filteredModels = remember(onlineModels, modelSearchQuery, installedModels) {
+            onlineModels.filter { model ->
+                if (modelSearchQuery.isBlank()) true
+                else model.fileName.contains(modelSearchQuery, ignoreCase = true) ||
+                        model.name.contains(modelSearchQuery, ignoreCase = true)
+            }
+        }
+
+        AlertDialog(
+            onDismissRequest = { showDownloadModelsDialog = false },
+            title = {
+                Column {
+                    Text("Download Wake Words")
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Source: Home Assistant Collection (en)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 250.dp, max = 450.dp)
+                ) {
+                    if (!isLoadingOnlineModels && onlineModelsError == null) {
+                        OutlinedTextField(
+                            value = modelSearchQuery,
+                            onValueChange = { modelSearchQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            placeholder = { Text("Search wake words...") },
+                            singleLine = true,
+                            trailingIcon = {
+                                if (modelSearchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { modelSearchQuery = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    if (isLoadingOnlineModels) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(Modifier.height(12.dp))
+                                Text("Loading models from GitHub...")
+                            }
+                        }
+                    } else if (onlineModelsError != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "Error: $onlineModelsError",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Button(onClick = {
+                                    isLoadingOnlineModels = true
+                                    onlineModelsError = null
+                                    scope.launch {
+                                        try {
+                                            onlineModels = WakeWordModelManager.fetchOnlineModels(context)
+                                        } catch (e: Throwable) {
+                                            onlineModelsError = e.message ?: "Failed to load models"
+                                        } finally {
+                                            isLoadingOnlineModels = false
+                                        }
+                                    }
+                                }) {
+                                    Text("Retry")
+                                }
+                            }
+                        }
+                    } else if (filteredModels.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No wake word models found.")
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            items(filteredModels, key = { it.path }) { model ->
+                                val isInstalled = installedModels.any { it.equals(model.name, ignoreCase = true) }
+                                val isDownloading = downloadingModelNames.contains(model.fileName)
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Text(
+                                            text = model.fileName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = "${model.path.substringBeforeLast('/')} • ${Utils.formatFileSize(model.size)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+
+                                    if (isDownloading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else if (isInstalled) {
+                                        FilledTonalButton(
+                                            onClick = {
+                                                selectedModel = model.name
+                                                onModelChanged(model.name)
+                                                Toast.makeText(context, "Selected ${model.name}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        ) {
+                                            Text("Installed")
+                                        }
+                                    } else {
+                                        Button(
+                                            onClick = {
+                                                downloadingModelNames = downloadingModelNames + model.fileName
+                                                scope.launch {
+                                                    val success = WakeWordModelManager.downloadModel(context, model)
+                                                    downloadingModelNames = downloadingModelNames - model.fileName
+                                                    if (success) {
+                                                        installedModels = WakeWordModelManager.getInstalledModels(context)
+                                                        selectedModel = model.name
+                                                        onModelChanged(model.name)
+                                                        Toast.makeText(context, "Downloaded and selected ${model.fileName}", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        Toast.makeText(context, "Failed to download ${model.fileName}", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            }
+                                        ) {
+                                            Text("Download")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                OutlinedButton(onClick = { showDownloadModelsDialog = false }) {
+                    Text("Close")
                 }
             }
         )

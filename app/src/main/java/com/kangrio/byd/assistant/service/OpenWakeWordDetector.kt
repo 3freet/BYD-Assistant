@@ -2,6 +2,7 @@ package com.kangrio.byd.assistant.service
 
 import android.content.Context
 import android.util.Log
+import com.kangrio.byd.assistant.util.WakeWordModelManager
 import com.suxsem.androidwakeword.WakeWordDetector
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,20 +31,7 @@ class OpenWakeWordDetector(
     }
 
     fun loadModels() {
-        context.assets.list(modelsPath)?.forEach { name ->
-            if (!name.endsWith(".onnx")) return@forEach
-
-            val file = File(context.filesDir, "$modelsPath/$name").apply {
-                parentFile?.mkdirs()
-            }
-            if (!file.exists()) {
-                context.assets.open("$modelsPath/$name").use { input ->
-                    file.outputStream().use { output ->
-                        input.copyTo(output)
-                    }
-                }
-            }
-        }
+        WakeWordModelManager.ensureDefaultModels(context)
     }
 
     fun start(): Boolean {
