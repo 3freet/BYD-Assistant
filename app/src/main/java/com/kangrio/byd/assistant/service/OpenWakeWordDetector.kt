@@ -7,6 +7,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.File
 
 class OpenWakeWordDetector(
     private val context: Context,
@@ -17,14 +18,36 @@ class OpenWakeWordDetector(
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var wakeWordEngine: WakeWordDetector? = null
     private val modelsPath = "openwakeword/models"
-    private val modelFile = "$modelsPath/$modelName.onnx"
+    private val modelFile = "${context.filesDir}/$modelsPath/$modelName.onnx"
 
     /**
      * Starts the wake word engine.
      * @return true if the engine was successfully started, false otherwise.
      */
+
+    init {
+        loadModels()
+    }
+
+    fun loadModels() {
+        context.assets.list(modelsPath)?.forEach { name ->
+            if (!name.endsWith(".onnx")) return@forEach
+
+            val file = File(context.filesDir, "$modelsPath/$name").apply {
+                parentFile?.mkdirs()
+            }
+            if (!file.exists()) {
+                context.assets.open("$modelsPath/$name").use { input ->
+                    file.outputStream().use { output ->
+                        input.copyTo(output)
+                    }
+                }
+            }
+        }
+    }
+
     fun start(): Boolean {
-        if (context.assets.list(modelsPath)?.firstOrNull { it.removeSuffix(".onnx") == modelName } == null) {
+        if (!File(modelFile).exists()) {
             log("No models found in assets")
             return false
         }

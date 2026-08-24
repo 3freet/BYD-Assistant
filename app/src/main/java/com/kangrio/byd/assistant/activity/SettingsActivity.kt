@@ -63,6 +63,7 @@ import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
 
 
@@ -187,12 +188,10 @@ fun SettingsScreen(
     var downloadProgress by remember { mutableFloatStateOf(0f) }
 
     val models = remember(expandedModels) {
-        context.assets
-            .list("openwakeword/models")
-            ?.filter { name -> name.endsWith("onnx") }
-            ?.map {
-                name -> name.removeSuffix(".onnx")
-            }
+        File(context.filesDir, "openwakeword/models")
+            .listFiles()
+            ?.filter { file -> file.isFile && file.name.endsWith(".onnx") }
+            ?.map { file -> file.name.removeSuffix(".onnx") }
             ?: emptyList()
     }
 

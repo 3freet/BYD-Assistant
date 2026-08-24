@@ -14,6 +14,7 @@ import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.util.ArrayDeque
@@ -221,11 +222,12 @@ class WakeWordDetector(
         if (providers.contains(OrtProvider.QNN)) opts.addQnn(mapOf("backend_path" to "libQnnHtp.so"))
 
         fun loadAsset(name: String) = ortEnv.createSession(context.assets.open(name).readBytes(), opts)
+        fun loaFile(name: String) = ortEnv.createSession(File(name).readBytes(), opts)
 
         sileroSession = loadAsset("silero_vad_16k_op15.onnx")
         melSession = loadAsset("melspectrogram.onnx")
         embeddingSession = loadAsset("embedding_model.onnx")
-        classifierSession = loadAsset(modelFile)
+        classifierSession = loaFile(modelFile)
         if (verifierFile != null)
             verifierSession = loadAsset(verifierFile)
 
