@@ -1,7 +1,6 @@
 [versions]
 accompanistDrawablepainter = "0.37.3"
 agp = "9.3.1"
-androidwakeword = "v0.1.0"
 audx = "v2.1.2"
 coreKtx = "1.19.0"
 junit = "4.13.2"
@@ -15,12 +14,11 @@ materialIconsExtended = "1.7.8"
 dadb = "2.0.0"
 okhttp = "5.4.0"
 retrofit = "3.0.0"
+onnxruntimeAndroid = "1.25.1"
 
 [libraries]
 accompanist-drawablepainter = { module = "com.google.accompanist:accompanist-drawablepainter", version.ref = "accompanistDrawablepainter" }
-androidwakeword = { module = "com.github.suxsem:AndroidWakeWord", version.ref = "androidwakeword" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
-audx = { module = "com.github.rizukirr.audx-android:audx", version.ref = "audx" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -40,8 +38,10 @@ dadb = { module = "dev.mobile:dadb", version.ref = "dadb" }
 okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
 retrofit-converter-gson = { module = "com.squareup.retrofit2:converter-gson", version.ref = "retrofit" }
+onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntimeAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+android-library = { id = "com.android.library", version.ref = "agp" }
 

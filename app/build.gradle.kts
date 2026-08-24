@@ -37,7 +37,7 @@ android {
         versionCode = appVersionCode
         versionName = appVersionName
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+            abiFilters += listOf("arm64-v8a")
         }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -62,6 +62,8 @@ android {
         release {
             optimization {
                 enable = true
+                isMinifyEnabled = true
+                isShrinkResources = true
             }
             signingConfig = if (file("signing.properties").exists()) {
                 signingConfigs.getByName("release")
@@ -72,6 +74,7 @@ android {
 
         register("beta") {
             initWith(getByName("release"))
+            matchingFallbacks += listOf("release")
             versionNameSuffix = "-beta.${betaNumber.get()}"
         }
     }
@@ -102,7 +105,7 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.accompanist.drawablepainter)
-    implementation(libs.androidwakeword)
+    implementation(project(":androidwakeword"))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

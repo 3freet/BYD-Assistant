@@ -25,3 +25,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Assistant"
 include(":app")
+include(":androidwakeword")

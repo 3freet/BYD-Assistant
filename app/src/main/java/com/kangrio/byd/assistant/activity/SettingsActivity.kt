@@ -628,9 +628,10 @@ private fun SettingRow(
 }
 
 private val SENSITIVITY_OPTIONS: List<Pair<String, Float>> = listOf(
+    "Easiest"   to 0.05f,
     "Easy"      to 0.2f,
-    "Normal"    to 0.5f,
-    "Hard"      to 0.7f
+    "Balanced"  to 0.5f,
+    "Strict"    to 0.7f
 )
 
 @Preview(showBackground = true, widthDp = 480, heightDp = 480)
