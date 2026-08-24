@@ -3,6 +3,7 @@ package com.kangrio.byd.assistant.activity
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.MediaRecorder
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -124,6 +125,7 @@ class SettingsActivity : ComponentActivity() {
                         initialOtaRelease = otaRelease,
                         onStateToggle = { state -> onStateToggle(state) },
                         onPlayDingToggle = { state -> Preferences.playDingOnStart = state },
+                        onAudioSourceChange = { source -> VoiceWakeService.setAudioSource(this, source) },
                         onSensitivityChange = { VoiceWakeService.setSensitivity(this, it) },
                         onModelChanged = { model -> VoiceWakeService.setModel(this, model) },
                         onModelDelete = { model ->  onModelDelete(model) },
@@ -186,6 +188,7 @@ fun SettingsScreen(
     initialOtaRelease: ReleaseInfo? = null,
     onStateToggle: (Boolean) -> Unit,
     onPlayDingToggle: (Boolean) -> Unit = {},
+    onAudioSourceChange: (Int) -> Unit = {},
     onSensitivityChange: (Float) -> Unit = {},
     onModelChanged: (String) -> Unit = { _-> },
     onModelDelete: (String) -> Boolean = { _ -> false },
@@ -236,6 +239,9 @@ fun SettingsScreen(
             }
         }
     }
+
+    var expandedAudioSource by remember { mutableStateOf(false) }
+    var selectedAudioSource by remember { mutableStateOf(AUDIO_SOURCE_OPTIONS.firstOrNull { (_, s) -> s == Preferences.micAudioSource }?.first ?: "Default" ) }
 
     var expandedSensitivity by remember { mutableStateOf(false) }
     var selectedSensitivityLevel by remember { mutableStateOf(SENSITIVITY_OPTIONS.firstOrNull { (_, s) -> s == Preferences.hotwordSensitivity }?.first ?: "" ) }
@@ -356,6 +362,46 @@ fun SettingsScreen(
                             contentDescription = "State toggle, ${if (isStateOn) "on" else "off"}"
                         }
                     )
+                }
+
+                SettingRow(
+                    enabled = isStateOn,
+                    label = "Audio Source",
+                    description = "Select the audio source to use for wake-word detection."
+                ) {
+                    Box {
+                        FilledTonalButton(
+                            onClick = { expandedAudioSource = !expandedAudioSource }
+                        ) {
+                            Text(selectedAudioSource)
+                        }
+
+                        DropdownMenu(
+                            expanded = expandedAudioSource,
+                            onDismissRequest = { expandedAudioSource = false },
+                            offset = DpOffset(
+                                x = 0.dp,
+                                y = 56.dp
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 300.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                AUDIO_SOURCE_OPTIONS.forEach { (label, source) ->
+                                    DropdownMenuItem(
+                                        text = { Text(label) },
+                                        onClick = {
+                                            onAudioSourceChange(source)
+                                            selectedAudioSource = label
+                                            expandedAudioSource = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 SettingRow(
@@ -955,6 +1001,14 @@ private val SENSITIVITY_OPTIONS: List<Pair<String, Float>> = listOf(
     "Easy"      to 0.2f,
     "Balanced"  to 0.5f,
     "Strict"    to 0.7f
+)
+
+private val AUDIO_SOURCE_OPTIONS: List<Pair<String, Int>> = listOf(
+    "Default"      to MediaRecorder.AudioSource.DEFAULT,
+    "Mic"          to MediaRecorder.AudioSource.MIC,
+    "CamCorder"    to MediaRecorder.AudioSource.CAMCORDER,
+    "Recognize"    to MediaRecorder.AudioSource.VOICE_RECOGNITION,
+    "Unprocessed"  to MediaRecorder.AudioSource.UNPROCESSED,
 )
 
 @Preview(showBackground = true, widthDp = 480, heightDp = 480)

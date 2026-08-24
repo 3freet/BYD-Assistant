@@ -29,6 +29,7 @@ private enum class VadMode {
 
 class WakeWordDetector(
     private val context: Context,
+    private val audioSource: Int,
     private val modelFile: String,
     private val verifierFile: String?,
     private val minScore: Float,
@@ -70,7 +71,7 @@ class WakeWordDetector(
 
     @SuppressLint("MissingPermission")
     private val audioRecord = AudioRecord(
-        MediaRecorder.AudioSource.DEFAULT,
+        audioSource,
         sampleRate,
         AudioFormat.CHANNEL_IN_MONO,
         AudioFormat.ENCODING_PCM_16BIT,
@@ -495,7 +496,7 @@ class WakeWordDetector(
             classifierSession.run(Collections.singletonMap(classifierInputName, it)).use { res ->
                 @Suppress("UNCHECKED_CAST")
                 val score = (res[0].value as Array<FloatArray>)[0][0]
-                Log.d("WakeWordDetector", "Classifier score: ${"%.6f".format(score)}:${"%.6f".format(minScore)}")
+                Log.d("WakeWordDetector", "Classifier score: ${"%.6f".format(score)} of ${"%.6f".format(minScore)}")
 
                 if (score < minScore) return
 

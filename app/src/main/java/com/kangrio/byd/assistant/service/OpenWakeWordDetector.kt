@@ -12,6 +12,7 @@ import java.io.File
 
 class OpenWakeWordDetector(
     private val context: Context,
+    private val audioSource: Int = android.media.MediaRecorder.AudioSource.DEFAULT,
     private val modelName: String = "hey_billy",
     private val sensitivity: Float = 0.5f,
     private val onDetected: () -> Unit
@@ -49,6 +50,7 @@ class OpenWakeWordDetector(
         log("Starting wake word engine")
         val engine = WakeWordDetector(
             context = context,
+            audioSource = audioSource,
             modelFile = modelFile,
             verifierFile = null,
             minScore = sensitivity,

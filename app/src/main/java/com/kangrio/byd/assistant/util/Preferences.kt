@@ -2,6 +2,7 @@ package com.kangrio.byd.assistant.util
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.media.MediaRecorder
 import com.kangrio.byd.assistant.Constant
 import androidx.core.content.edit
 
@@ -26,6 +27,10 @@ object Preferences {
     var hotwordSensitivity: Float
         get() = prefs.getFloat(Constant.PREFS_HOTWORD_SENSITIVITY, 0.5f)
         set(value) = prefs.edit { putFloat(Constant.PREFS_HOTWORD_SENSITIVITY, value) }
+
+    var micAudioSource: Int
+        get() = prefs.getInt(Constant.PREFS_MIC_AUDIO_SOURCE, MediaRecorder.AudioSource.DEFAULT)
+        set(value) = prefs.edit { putInt(Constant.PREFS_MIC_AUDIO_SOURCE, value) }
 
     var playDingOnStart: Boolean
         get() = prefs.getBoolean(Constant.PREFS_PLAY_DING_ON_START, true)
