@@ -495,6 +495,7 @@ class WakeWordDetector(
             classifierSession.run(Collections.singletonMap(classifierInputName, it)).use { res ->
                 @Suppress("UNCHECKED_CAST")
                 val score = (res[0].value as Array<FloatArray>)[0][0]
+                Log.d("WakeWordDetector", "Classifier score: ${"%.6f".format(score)}:${"%.6f".format(minScore)}")
 
                 if (score < minScore) return
 
