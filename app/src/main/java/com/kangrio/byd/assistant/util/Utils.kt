@@ -235,14 +235,14 @@ object Utils {
     suspend fun adbShell(context: Context, cmd: String) =
         withContext(Dispatchers.IO) {
             setupUserHome(context)
-            val result = withTimeoutOrNull(10_000L.milliseconds) {
+            val result = withTimeoutOrNull(20_000L.milliseconds) {
                 while (isActive) {
                     try {
-                        var dAdb = Dadb.discover(connectTimeout = 1000, socketTimeout = 1000)
+                        var dAdb = Dadb.discover(connectTimeout = 2000, socketTimeout = 5000)
                         dAdb?.shell("echo 'init'") ?: throw Throwable("fail to connect adb")
                         dAdb.close()
 
-                        dAdb = Dadb.discover(connectTimeout = 1000, socketTimeout = 5000)
+                        dAdb = Dadb.discover(connectTimeout = 2000, socketTimeout = 5000)
                         dAdb?.shell(cmd)
                         dAdb?.close()
                         return@withTimeoutOrNull true

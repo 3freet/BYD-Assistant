@@ -81,6 +81,11 @@ class VoiceWakeService : Service() {
                 val sensitivity = intent.extras?.getFloat("sensitivity") ?: return START_STICKY
                 setSensitivity(sensitivity)
             }
+
+            SET_AUDIO_SOURCE -> {
+                val source = intent.extras?.getInt("source") ?: return START_STICKY
+                setAudioSource(source)
+            }
         }
 
         return START_STICKY
@@ -103,6 +108,13 @@ class VoiceWakeService : Service() {
         }
     }
 
+    fun setAudioSource(source: Int) {
+        scope.launch {
+            Preferences.micAudioSource = source
+            restartHotwordDetection()
+        }
+    }
+
     fun setModel(modelName: String) {
         scope.launch {
             Preferences.hotwordModelName = modelName
@@ -118,9 +130,11 @@ class VoiceWakeService : Service() {
         if (!Utils.setupCompleted(this@VoiceWakeService) || !Preferences.startHotword) return
 
         val modelName = Preferences.hotwordModelName
+        val audioSource = Preferences.micAudioSource
         detector?.stop()
         detector = OpenWakeWordDetector(
             context = this@VoiceWakeService,
+            audioSource = audioSource,
             modelName = modelName,
             sensitivity = Preferences.hotwordSensitivity,
         ) {
@@ -234,6 +248,7 @@ class VoiceWakeService : Service() {
         const val STOP_HOTWORD_DETECTION = "com.kangrio.byd.assistant.action.STOP_HOTWORD_DETECTION"
         const val SET_MODEL = "com.kangrio.byd.assistant.action.SET_MODEL"
         const val SET_SENSITIVITY = "com.kangrio.byd.assistant.action.SET_SENSITIVITY"
+        const val SET_AUDIO_SOURCE = "com.kangrio.byd.assistant.action.SET_AUDIO_SOURCE"
 
         fun startService(context: Context) {
             if (isStarted || !Utils.setupCompleted(context)) return
@@ -266,6 +281,14 @@ class VoiceWakeService : Service() {
             val intent = Intent(context, VoiceWakeService::class.java).apply {
                 action = SET_SENSITIVITY
                 putExtra("sensitivity", sensitivity)
+            }
+            context.startService(intent)
+        }
+
+        fun setAudioSource(context: Context, source: Int) {
+            val intent = Intent(context, VoiceWakeService::class.java).apply {
+                action = SET_AUDIO_SOURCE
+                putExtra("source", source)
             }
             context.startService(intent)
         }

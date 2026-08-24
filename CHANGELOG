@@ -1,3 +1,7 @@
+- 1.0.4
+  • add configurable audio source for wake-word detection
+  • improve ADB discovery and shell execution timeouts for better reliability
+
 - 1.0.3
   • Migrate wake-word detection engine from Snowboy to AndroidWakeWord to reduce false triggers
     • Recommended to clear app data after updated to this version
