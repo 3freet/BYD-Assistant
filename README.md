@@ -193,10 +193,11 @@ Artifacts will be generated in `app/build/outputs/apk/<variant>/` following the 
 
 This project builds upon the following open-source libraries and projects:
 
-| Project                                                      | Author / Org | Description                                                                                                                                                                      |
-|:-------------------------------------------------------------|:-------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| [AndroidWakeWord](https://github.com/Suxsem/AndroidWakeWord) | Suxsem       | Android library implementing openWakeWord detection using ONNX Runtime and SpeexDSP.                                                                                             |
-| [dadb](https://github.com/mobile-dev-inc/dadb)               | mobile.dev   | A Kotlin library for communicating with Android devices over ADB directly from the device itself. Used here to automatically grant `WRITE_SECURE_SETTINGS` without needing a PC. |
+| Project                                                                                 | Author / Org | Description                                                                                                                                                                      |
+|:----------------------------------------------------------------------------------------|:-------------|:---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| [AndroidWakeWord](https://github.com/Suxsem/AndroidWakeWord)                            | Suxsem       | Android library implementing openWakeWord detection using ONNX Runtime and SpeexDSP.                                                                                             |
+| [dadb](https://github.com/mobile-dev-inc/dadb)                                          | mobile.dev   | A Kotlin library for communicating with Android devices over ADB directly from the device itself. Used here to automatically grant `WRITE_SECURE_SETTINGS` without needing a PC. |
+| [wakewords-collection](https://github.com/fwartner/home-assistant-wakewords-collection) | fwartner     | Community Collection of Wake-Words for Home Assistant                                                                                                                            |
 
 
 ---
