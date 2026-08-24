@@ -121,7 +121,16 @@ fun LogcatScreen(modifier: Modifier = Modifier) {
         val job = scope.launch(Dispatchers.IO) {
             try {
                 val proc = Runtime.getRuntime().exec(
-                    arrayOf("logcat", "-T", "1", "-v", "threadtime")
+                    arrayOf(
+                        "logcat",
+                        "-T", "1",
+                        "-v", "threadtime",
+                        "View:S",
+                        "ViewRootImpl:S",
+                        "RecyclerView:S",
+                        "InputMethodManager:S",
+                        "*:V"
+                    )
                 )
                 process = proc
 
