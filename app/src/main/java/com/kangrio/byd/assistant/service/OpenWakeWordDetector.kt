@@ -19,7 +19,7 @@ class OpenWakeWordDetector(
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var wakeWordEngine: WakeWordDetector? = null
     private val modelsPath = "openwakeword/models"
-    private val modelFile = "${context.filesDir}/$modelsPath/$modelName.onnx"
+    private var modelFile = "${context.filesDir}/$modelsPath/$modelName.onnx"
 
     /**
      * Starts the wake word engine.
@@ -36,8 +36,14 @@ class OpenWakeWordDetector(
 
     fun start(): Boolean {
         if (!File(modelFile).exists()) {
-            log("No models found in assets")
-            return false
+            log("No models found in assets, trying to load default model")
+
+            // fallback to default model
+            modelFile = "${context.filesDir}/$modelsPath/hey_billy.onnx"
+            if (!File(modelFile).exists()) {
+                log("No default models found in assets")
+                return false
+            }
         }
 
         log("Starting wake word engine")
