@@ -71,6 +71,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -365,35 +366,45 @@ fun SettingsScreen(
 
                         DropdownMenu(
                             expanded = expandedModels,
-                            onDismissRequest = { expandedModels = false }
+                            onDismissRequest = { expandedModels = false },
+                            offset = DpOffset(
+                                x = 0.dp,
+                                y = 56.dp
+                            )
                         ) {
-                            installedModels.forEach { model ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = model,
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .fillMaxHeight()
-                                                .combinedClickable(
-                                                    onClick = {
-                                                        onModelChanged(model)
-                                                        selectedModel = model
-                                                        expandedModels = false
-                                                    },
-                                                    onLongClick = {
-                                                        if (selectedModel != model) {
-                                                            val success = onModelDelete(model)
-                                                            if (success) {
-                                                                installedModels = WakeWordModelManager.getInstalledModels(context)
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 300.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                installedModels.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = model,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .fillMaxHeight()
+                                                    .combinedClickable(
+                                                        onClick = {
+                                                            onModelChanged(model)
+                                                            selectedModel = model
+                                                            expandedModels = false
+                                                        },
+                                                        onLongClick = {
+                                                            if (selectedModel != model) {
+                                                                val success = onModelDelete(model)
+                                                                if (success) {
+                                                                    installedModels = WakeWordModelManager.getInstalledModels(context)
+                                                                }
                                                             }
                                                         }
-                                                    }
-                                            ),
-                                        )
-                                    },
-                                    onClick = { }
-                                )
+                                                ),
+                                            )
+                                        },
+                                        onClick = { }
+                                    )
+                                }
                             }
                         }
                     }
@@ -454,17 +465,27 @@ fun SettingsScreen(
 
                         DropdownMenu(
                             expanded = expandedSensitivity,
-                            onDismissRequest = { expandedSensitivity = false }
+                            onDismissRequest = { expandedSensitivity = false },
+                            offset = DpOffset(
+                                x = 0.dp,
+                                y = 56.dp
+                            )
                         ) {
-                            SENSITIVITY_OPTIONS.forEach { (level, sensitivity) ->
-                                DropdownMenuItem(
-                                    text = { Text(level) },
-                                    onClick = {
-                                        onSensitivityChange(sensitivity)
-                                        selectedSensitivityLevel = level
-                                        expandedSensitivity = false
-                                    }
-                                )
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 300.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                SENSITIVITY_OPTIONS.forEach { (level, sensitivity) ->
+                                    DropdownMenuItem(
+                                        text = { Text(level) },
+                                        onClick = {
+                                            onSensitivityChange(sensitivity)
+                                            selectedSensitivityLevel = level
+                                            expandedSensitivity = false
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
