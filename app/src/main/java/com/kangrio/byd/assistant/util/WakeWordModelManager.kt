@@ -1,5 +1,7 @@
 package com.kangrio.byd.assistant.util
 
+import ai.onnxruntime.OrtEnvironment
+import ai.onnxruntime.OrtSession
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -13,6 +15,7 @@ import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.TimeUnit
+import kotlin.jvm.Throws
 
 object WakeWordModelManager {
     private const val TAG = "WakeWordModelManager"
@@ -89,6 +92,17 @@ object WakeWordModelManager {
         return name
     }
 
+    @Throws(Throwable::class)
+    fun validate(filePath: String): Boolean {
+        OrtEnvironment.getEnvironment().createSession(
+            filePath,
+            OrtSession.SessionOptions()
+        ).use {
+            // Valid
+        }
+        return true
+    }
+
     suspend fun importModelFromUri(context: Context, uri: Uri): Result<String> = withContext(Dispatchers.IO) {
         try {
             val fileName = getFileNameFromUri(context, uri)
@@ -99,6 +113,8 @@ object WakeWordModelManager {
             }
 
             val targetFile = File(getModelsDir(context), fileName)
+            validate(targetFile.absolutePath)
+
             val inputStream = context.contentResolver.openInputStream(uri)
                 ?: return@withContext Result.failure(IllegalStateException("Failed to open file stream."))
 
