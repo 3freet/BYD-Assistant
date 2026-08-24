@@ -26,6 +26,7 @@ import android.content.IntentFilter
 import com.kangrio.byd.assistant.ota.OtaUpdater
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
 
 class VoiceWakeService : Service() {
@@ -148,8 +149,15 @@ class VoiceWakeService : Service() {
     }
 
     private fun onWakeWordDetected() {
-        scope.launch(Dispatchers.Main) {
-            Utils.startVoiceAssistant(this@VoiceWakeService)
+        scope.launch(Dispatchers.IO) {
+            detector?.pause()
+
+            withContext(Dispatchers.Main) {
+                Utils.startVoiceAssistant(this@VoiceWakeService)
+            }
+
+            delay(DEBOUNCE_DELAY_MS.milliseconds)
+            detector?.resume()
         }
     }
 
@@ -216,6 +224,7 @@ class VoiceWakeService : Service() {
     companion object {
         private const val CHANNEL_ID = "voice_assistant"
         private const val NOTIFICATION_ID = 1001
+        private const val DEBOUNCE_DELAY_MS = 5_000L
         private var isStarted = false
         var isWakeWordStarted = false
             private set
