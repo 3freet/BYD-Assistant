@@ -335,6 +335,7 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
+                    enabled = isStateOn,
                     label = "Wake Word",
                     description = "Select the model used to detect your wake word."
                 ) {
@@ -367,6 +368,7 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
+                    enabled = isStateOn,
                     label = "Import Model",
                     description = "Import .onnx wake word model from storage."
                 ) {
@@ -380,6 +382,7 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
+                    enabled = isStateOn,
                     label = "Download Wake Words",
                     description = "Download models from Home Assistant collection."
                 ) {
@@ -406,6 +409,7 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
+                    enabled = isStateOn,
                     label = "Detection Sensitivity",
                     description = "Adjust how easily the wake word is detected."
                 ) {
@@ -854,6 +858,7 @@ private fun TitlePill(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun SettingRow(
+    enabled: Boolean = true,
     label: String,
     description: String = "",
     content: @Composable () -> Unit
@@ -876,8 +881,9 @@ private fun SettingRow(
                 )
             }
         }
-
-        content()
+        if (enabled) {
+            content()
+        }
     }
 }
 
