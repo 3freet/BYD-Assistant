@@ -1,5 +1,10 @@
 # Assistant
 
+![Stars](https://img.shields.io/github/stars/kangrio/Assistant) ![Forks](https://img.shields.io/github/forks/kangrio/Assistant) ![Downloads](https://img.shields.io/github/downloads/kangrio/Assistant/total) ![Release](https://img.shields.io/github/v/release/kangrio/Assistant)
+
+![Open Issues](https://img.shields.io/github/issues-raw/kangrio/Assistant) ![Closed Issues](https://img.shields.io/github/issues-closed-raw/kangrio/Assistant) ![License](https://img.shields.io/github/license/kangrio/Assistant) ![Last Commit](https://img.shields.io/github/last-commit/kangrio/AuroraStore-BYD)
+
+
 **Assistant** (`com.kangrio.byd.assistant`) is an Android utility and voice interaction bridge tailored for BYD vehicle infotainment units (DiLink) and custom Android head units / AOSP devices.
 
 Launcher shortcuts directly to your preferred AI voice assistant (Google Assistant, ChatGPT, Perplexity, Claude, etc.), provides **always-listening offline hotword / wake-word detection** ("Hey Rio", "Alexa", "Snowboy", or custom trained models), and includes a modern onboarding wizard to configure system-level voice interaction services with ease.
