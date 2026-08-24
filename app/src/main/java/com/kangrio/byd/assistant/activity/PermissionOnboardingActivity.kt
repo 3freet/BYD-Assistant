@@ -26,9 +26,6 @@ class PermissionOnboardingActivity : ComponentActivity() {
     }
 
     private fun finishOnboarding() {
-        if (Utils.setupCompleted(this)) {
-            Utils.startVoiceAssistant(this)
-        }
         startActivity(Intent(this, SettingsActivity::class.java))
         finish()
     }

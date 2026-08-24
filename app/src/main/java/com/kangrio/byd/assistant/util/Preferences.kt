@@ -16,20 +16,16 @@ object Preferences {
         set(value) = prefs.edit { putString(Constant.PREFS_ASSISTANT_PACKAGE_COMPONENT, value) }
 
     var startHotword: Boolean
-        get() = prefs.getBoolean(Constant.PREFS_START_HOTWORD, true)
+        get() = prefs.getBoolean(Constant.PREFS_START_HOTWORD, false)
         set(value) = prefs.edit { putBoolean(Constant.PREFS_START_HOTWORD, value) }
 
     var hotwordModelName: String
-        get() = prefs.getString(Constant.PREFS_HOTWORD_MODEL_NAME, "hey_rio") ?: "hey_rio"
+        get() = prefs.getString(Constant.PREFS_HOTWORD_MODEL_NAME, "hey_billy") ?: "hey_billy"
         set(value) = prefs.edit { putString(Constant.PREFS_HOTWORD_MODEL_NAME, value) }
 
     var hotwordSensitivity: Float
         get() = prefs.getFloat(Constant.PREFS_HOTWORD_SENSITIVITY, 0.5f)
         set(value) = prefs.edit { putFloat(Constant.PREFS_HOTWORD_SENSITIVITY, value) }
-
-    var hotwordGain: Float
-        get() = prefs.getFloat(Constant.PREFS_HOTWORD_GAIN, 1.0f)
-        set(value) = prefs.edit { putFloat(Constant.PREFS_HOTWORD_GAIN, value) }
 
     var playDingOnStart: Boolean
         get() = prefs.getBoolean(Constant.PREFS_PLAY_DING_ON_START, true)

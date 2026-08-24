@@ -2,5 +2,5 @@
 <resources>
 
     <style name="Theme.Assistant" parent="android:Theme.Material.Light.NoActionBar" />
-    <style name="Theme.Start" parent="android:Theme.Translucent.NoTitleBar.Fullscreen" />
+    <style name="Theme.Start" parent="android:Theme.NoDisplay" />
 </resources>

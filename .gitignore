@@ -166,6 +166,8 @@ fabric.properties
 
 # End of https://www.toptal.com/developers/gitignore/api/android,androidstudio
 
-/*/release/
+app/release/*
+app/beta/*
+
 signing.properties
 *.keystore

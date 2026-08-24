@@ -3,46 +3,59 @@ package com.kangrio.byd.assistant.activity
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.MediaRecorder
-import android.net.Uri
-import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilledTonalButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import com.kangrio.byd.assistant.ota.OtaUpdater
+import com.kangrio.byd.assistant.data.OnlineWakeWordModel
 import com.kangrio.byd.assistant.data.ReleaseInfo
+import com.kangrio.byd.assistant.ota.OtaUpdater
+import com.kangrio.byd.assistant.service.VoiceWakeService
+import com.kangrio.byd.assistant.ui.composable.AppIcon
+import com.kangrio.byd.assistant.ui.theme.AssistantTheme
+import com.kangrio.byd.assistant.util.Preferences
+import com.kangrio.byd.assistant.util.Utils
+import com.kangrio.byd.assistant.util.WakeWordModelManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -58,134 +71,32 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.lifecycleScope
-import com.kangrio.byd.assistant.service.VoiceWakeService
-import com.kangrio.byd.assistant.ui.composable.AppIcon
-import com.kangrio.byd.assistant.ui.theme.AssistantTheme
-import com.kangrio.byd.assistant.util.Preferences
-import com.kangrio.byd.assistant.util.SnowboyTrainClient
-import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
-private const val WAKE_WORD_MODEL_NAME = "user_custom"
-private const val SEASALT_BASE_URL = "https://snowboy.jolanrensen.nl" // snowboy-seasalt host
-private const val MIN_SAMPLES = 3
-
-/** Drives the inline record panel: which controls are enabled and what's shown. */
-sealed class RecordPhase {
-    data object Idle : RecordPhase()
-    data object Recording : RecordPhase()
-    data object Uploading : RecordPhase()
-    data class Trained(val pmdlFile: File) : RecordPhase()
-    data class Failure(val message: String) : RecordPhase()
-}
-
-/** Thin wrapper around MediaRecorder for one take at a time. */
-private class SampleRecorder(
-    private val context: android.content.Context,
-    private val outputDir: File
-) {
-    private var recorder: MediaRecorder? = null
-    private var currentFile: File? = null
-
-    fun start(): File {
-        if (!outputDir.exists()) outputDir.mkdirs()
-        val file = File(outputDir, "sample_${System.currentTimeMillis()}.m4a")
-        currentFile = file
-
-        @Suppress("DEPRECATION")
-        val newRecorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            MediaRecorder(context)
-        } else {
-            MediaRecorder()
-        }
-
-        newRecorder.apply {
-            setAudioSource(MediaRecorder.AudioSource.MIC)
-            setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
-            setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
-            setOutputFile(file.absolutePath)
-            prepare()
-            start()
-        }
-        recorder = newRecorder
-        return file
-    }
-
-    /** Stops the current take and returns the recorded file, or null if nothing was captured. */
-    fun stop(): File? {
-        return try {
-            recorder?.apply {
-                stop()
-                release()
-            }
-            recorder = null
-            currentFile
-        } catch (e: Exception) {
-            recorder?.release()
-            recorder = null
-            currentFile?.delete()
-            null
-        }
-    }
-
-    /** Aborts the current take, discarding any partial recording. */
-    fun cancel() {
-        try {
-            recorder?.stop()
-        } catch (_: Exception) {
-            // recorder never produced valid output; nothing to clean up beyond release
-        }
-        recorder?.release()
-        recorder = null
-        currentFile?.delete()
-        currentFile = null
-    }
-}
+private var isImportingModel = false
 
 class SettingsActivity : ComponentActivity() {
 
-    private val trainClient = SnowboyTrainClient(baseUrl = SEASALT_BASE_URL)
-    private lateinit var sampleRecorder: SampleRecorder
-
-    private var showTrainPanel = mutableStateOf(false)
-    private var recordPhase = mutableStateOf<RecordPhase>(RecordPhase.Idle)
-    private var samples = mutableStateOf<List<File>>(emptyList())
     private var initialOtaRelease = mutableStateOf<ReleaseInfo?>(null)
 
-    private val requestMicPermission = registerForActivityResult(
+    private val requestMicPermissionWakeWord = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
-        if (granted) beginRecording() else {
-            Toast.makeText(this, "Microphone permission is required to record", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    private val savePmdlLauncher = registerForActivityResult(
-        ActivityResultContracts.CreateDocument("application/octet-stream")
-    ) { uri: Uri? ->
-        val pmdlFile = (recordPhase.value as? RecordPhase.Trained)?.pmdlFile
-        if (uri != null && pmdlFile != null) {
-            contentResolver.openOutputStream(uri)?.use { out ->
-                pmdlFile.inputStream().use { it.copyTo(out) }
-            }
-            Toast.makeText(this, "Saved $WAKE_WORD_MODEL_NAME.pmdl", Toast.LENGTH_SHORT).show()
+        if (granted) {
+            VoiceWakeService.setState(this, true)
+        } else {
+            Toast.makeText(this, "Microphone permission is required for wake word detection", Toast.LENGTH_SHORT).show()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        sampleRecorder = SampleRecorder(
-            context = applicationContext,
-            outputDir = cacheDir.resolve("wake_samples")
-        )
 
         val otaVersion = intent.getStringExtra("EXTRA_OTA_VERSION")
         val otaUrl = intent.getStringExtra("EXTRA_OTA_URL")
@@ -205,100 +116,61 @@ class SettingsActivity : ComponentActivity() {
 
         setContent {
             AssistantTheme {
-                val panelOpen by showTrainPanel
-                val phase by recordPhase
-                val currentSamples by samples
                 val otaRelease by initialOtaRelease
 
                 Scaffold(modifier = Modifier.fillMaxSize()) { paddingValues ->
                     SettingsScreen(
                         modifier = Modifier.padding(paddingValues),
                         initialOtaRelease = otaRelease,
-                        onStateToggle = { state -> VoiceWakeService.setState(this, state) },
+                        onStateToggle = { state -> onStateToggle(state) },
                         onPlayDingToggle = { state -> Preferences.playDingOnStart = state },
                         onSensitivityChange = { VoiceWakeService.setSensitivity(this, it) },
-                        onGainChange = { VoiceWakeService.setGain(this, it) },
-                        recordPhase = phase,
-                        sampleCount = currentSamples.size,
                         onModelChanged = { model -> VoiceWakeService.setModel(this, model) },
-                        onStartRecordClick = { onStartOrStopRecord(phase) },
-                        onSubmitClick = { submitSamples(currentSamples) },
-                        onNewClick = { resetPanel() },
+                        onModelDelete = { model ->  onModelDelete(model) },
                     )
                 }
             }
         }
     }
 
-    override fun onStop() {
-        super.onStop()
-        if (recordPhase.value is RecordPhase.Recording) {
-            sampleRecorder.cancel()
-            recordPhase.value = RecordPhase.Idle
-        }
-        finish()
+    override fun onResume() {
+        super.onResume()
+        isImportingModel = false
     }
 
-    private fun onStartOrStopRecord(phase: RecordPhase) {
-        if (phase is RecordPhase.Recording) {
-            val file = sampleRecorder.stop()
-            recordPhase.value = RecordPhase.Idle
-            if (file != null) {
-                samples.value += file
-            } else {
-                Toast.makeText(this, "Recording failed, try again", Toast.LENGTH_SHORT).show()
-            }
+    override fun onStop() {
+        super.onStop()
+        if (!isImportingModel) {
+            finish()
+        }
+    }
+
+    private fun onStateToggle(state: Boolean) {
+        if (!state) {
+            VoiceWakeService.setState(this, false)
             return
         }
 
         val hasPermission = ContextCompat.checkSelfPermission(
-            this, Manifest.permission.RECORD_AUDIO
+            this,
+            Manifest.permission.RECORD_AUDIO
         ) == PackageManager.PERMISSION_GRANTED
 
-        if (hasPermission) beginRecording() else requestMicPermission.launch(Manifest.permission.RECORD_AUDIO)
-    }
-
-    private fun beginRecording() {
-        try {
-            sampleRecorder.start()
-            recordPhase.value = RecordPhase.Recording
-        } catch (e: Exception) {
-            recordPhase.value = RecordPhase.Failure(e.message ?: "Couldn't start recording")
+        if (hasPermission) {
+            VoiceWakeService.setState(this, true)
+        } else {
+            requestMicPermissionWakeWord.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
-    private fun submitSamples(currentSamples: List<File>) {
-        if (currentSamples.size < MIN_SAMPLES) {
-            Toast.makeText(this, "Record at least $MIN_SAMPLES samples first", Toast.LENGTH_SHORT).show()
-            return
+    private fun onModelDelete(model: String): Boolean {
+        val success = WakeWordModelManager.deleteModel(this, model)
+        if (success) {
+            Toast.makeText(this, "Deleted $model", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Failed to delete $model (Build-in model or not exist.)", Toast.LENGTH_SHORT).show()
         }
-
-        recordPhase.value = RecordPhase.Uploading
-        lifecycleScope.launch {
-            when (val result = trainClient.train(
-                modelName = WAKE_WORD_MODEL_NAME,
-                samples = currentSamples,
-                outputDir = filesDir.resolve("snowboy/models")
-            )) {
-                is SnowboyTrainClient.TrainResult.Success -> {
-                    VoiceWakeService.setModel(this@SettingsActivity, result.pmdlFile.nameWithoutExtension)
-                    recordPhase.value = RecordPhase.Trained(result.pmdlFile)
-                    Toast.makeText(this@SettingsActivity, "Wake word trained", Toast.LENGTH_SHORT).show()
-                }
-                is SnowboyTrainClient.TrainResult.Failure -> {
-                    recordPhase.value = RecordPhase.Failure(result.message)
-                    Toast.makeText(this@SettingsActivity, result.message, Toast.LENGTH_LONG).show()
-                }
-            }
-        }
-    }
-
-    /** Clears recorded takes and any trained/failed result so a fresh session can start. */
-    private fun resetPanel() {
-        if (recordPhase.value is RecordPhase.Recording) sampleRecorder.cancel()
-        samples.value.forEach { it.delete() }
-        samples.value = emptyList()
-        recordPhase.value = RecordPhase.Idle
+        return success
     }
 }
 
@@ -315,13 +187,8 @@ fun SettingsScreen(
     onStateToggle: (Boolean) -> Unit,
     onPlayDingToggle: (Boolean) -> Unit = {},
     onSensitivityChange: (Float) -> Unit = {},
-    onGainChange: (Float) -> Unit = {},
-    recordPhase: RecordPhase = RecordPhase.Idle,
-    sampleCount: Int = 0,
     onModelChanged: (String) -> Unit = { _-> },
-    onStartRecordClick: () -> Unit = {},
-    onSubmitClick: () -> Unit = {},
-    onNewClick: () -> Unit = {},
+    onModelDelete: (String) -> Boolean = { _ -> false },
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -340,11 +207,41 @@ fun SettingsScreen(
 
     var expandedModels by remember { mutableStateOf(false) }
     var selectedModel by remember { mutableStateOf(Preferences.hotwordModelName) }
+    var installedModels by remember {
+        mutableStateOf(WakeWordModelManager.getInstalledModels(context))
+    }
+
+    var showDownloadModelsDialog by remember { mutableStateOf(false) }
+    var onlineModels by remember { mutableStateOf<List<OnlineWakeWordModel>>(emptyList()) }
+    var isLoadingOnlineModels by remember { mutableStateOf(false) }
+    var onlineModelsError by remember { mutableStateOf<String?>(null) }
+    var downloadingModelNames by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var modelSearchQuery by remember { mutableStateOf("") }
+
+    val importModelLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        isImportingModel = false
+        if (uri != null) {
+            scope.launch {
+                val result = WakeWordModelManager.importModelFromUri(context, uri)
+                result.onSuccess { importedModelName ->
+                    installedModels = WakeWordModelManager.getInstalledModels(context)
+                    selectedModel = importedModelName
+                    onModelChanged(importedModelName)
+                    Toast.makeText(context, "Imported \"$importedModelName\" successfully", Toast.LENGTH_SHORT).show()
+                }.onFailure { err ->
+                    Toast.makeText(context, err.message ?: "Failed to import model", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    var expandedSensitivity by remember { mutableStateOf(false) }
+    var selectedSensitivityLevel by remember { mutableStateOf(SENSITIVITY_OPTIONS.firstOrNull { (_, s) -> s == Preferences.hotwordSensitivity }?.first ?: "" ) }
 
     var isStateOn by remember { mutableStateOf(Preferences.startHotword) }
     var isPlayDing by remember { mutableStateOf(Preferences.playDingOnStart) }
-    var sensitivity by remember { mutableFloatStateOf(Preferences.hotwordSensitivity) }
-    var gain by remember { mutableFloatStateOf(Preferences.hotwordGain) }
 
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var availableUpdate by remember { mutableStateOf<ReleaseInfo?>(initialOtaRelease) }
@@ -352,16 +249,10 @@ fun SettingsScreen(
     var isDownloadingUpdate by remember { mutableStateOf(false) }
     var downloadProgress by remember { mutableFloatStateOf(0f) }
 
-    val models = remember(selectedModel) {
-        context.filesDir.resolve("snowboy/models")
-            .listFiles()
-            ?.filter { it.isFile && it.extension.equals("pmdl", ignoreCase = true) }
-            ?: emptyList()
-    }
-
     LaunchedEffect(lifecycleOwner) {
         while (true) {
             isWriteSecureSettingsGranted = Utils.isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
+            isStateOn = VoiceWakeService.isWakeWordStarted
             delay(1_000L.milliseconds)
         }
     }
@@ -435,24 +326,8 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
-                    label = "Voice Detection",
-                    description = "Enable or disable wake-word detection."
-                ) {
-                    Switch(
-                        checked = isStateOn,
-                        onCheckedChange = {
-                            isStateOn = it
-                            onStateToggle(it)
-                        },
-                        modifier = Modifier.semantics {
-                            contentDescription = "State toggle, ${if (isStateOn) "on" else "off"}"
-                        }
-                    )
-                }
-
-                SettingRow(
                     label = "Play Sound",
-                    description = "Play a sound when voice detection starts."
+                    description = "Play a sound when the voice assistant launches."
                 ) {
                     Switch(
                         checked = isPlayDing,
@@ -468,60 +343,174 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
-                    label = "Detection Sensitivity",
-                    description = "Adjust how easily the wake word is detected."
+                    label = "Voice Detection (Experimental)",
+                    description = "Enable wake-word detection. False triggers may occur."
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Slider(
-                            modifier = Modifier
-                                .width(240.dp)
-                                .padding(end = 12.dp),
-                            value = sensitivity,
-                            onValueChange = {
-                                sensitivity = it
-                            },
-                            onValueChangeFinished = {
-                                onSensitivityChange(sensitivity)
-                            },
-                            valueRange = 0.1f..1f,
-                            steps = 8,
-                        )
-                        Text(
-                            text = "%.1f".format(sensitivity),
-                        )
+                    Switch(
+                        checked = isStateOn,
+                        onCheckedChange = {
+                            isStateOn = it
+                            onStateToggle(it)
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription = "State toggle, ${if (isStateOn) "on" else "off"}"
+                        }
+                    )
+                }
+
+                SettingRow(
+                    enabled = isStateOn,
+                    label = "Wake Word",
+                    description = "Select the model used to detect your wake word."
+                ) {
+                    Box {
+                        FilledTonalButton(
+                            onClick = {
+                                installedModels = WakeWordModelManager.getInstalledModels(context)
+                                expandedModels = !expandedModels
+                            }
+                        ) {
+                            Text(selectedModel)
+                        }
+
+                        DropdownMenu(
+                            expanded = expandedModels,
+                            onDismissRequest = { expandedModels = false },
+                            offset = DpOffset(
+                                x = 0.dp,
+                                y = 56.dp
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 300.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                installedModels.forEach { model ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = model,
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .fillMaxHeight()
+                                                    .combinedClickable(
+                                                        onClick = {
+                                                            onModelChanged(model)
+                                                            selectedModel = model
+                                                            expandedModels = false
+                                                        },
+                                                        onLongClick = {
+                                                            if (selectedModel != model) {
+                                                                val success = onModelDelete(model)
+                                                                if (success) {
+                                                                    installedModels = WakeWordModelManager.getInstalledModels(context)
+                                                                }
+                                                            }
+                                                        }
+                                                ),
+                                            )
+                                        },
+                                        onClick = { }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
                 SettingRow(
-                    label = "Microphone Gain",
-                    description = "Adjust the microphone input volume."
+                    enabled = isStateOn,
+                    label = "Import Model",
+                    description = "Import .onnx wake word model from storage."
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
+                    FilledTonalButton(
+                        onClick = {
+                            isImportingModel = true
+                            importModelLauncher.launch(arrayOf("*/*"))
+                        }
                     ) {
-                        Slider(
-                            modifier = Modifier
-                                .width(240.dp)
-                                .padding(end = 12.dp),
-                            value = gain,
-                            onValueChange = {
-                                gain = it
-                            },
-                            onValueChangeFinished = {
-                                onGainChange(gain)
-                            },
-                            valueRange = 0.1f..2.0f,
-                            steps = 19,
-                        )
-                        Text(
-                            text = "%.1f".format(gain),
-                        )
+                        Text("Import")
+                    }
+                }
+
+                SettingRow(
+                    enabled = isStateOn,
+                    label = "Download Wake Words",
+                    description = "Download models from Home Assistant collection."
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            showDownloadModelsDialog = true
+                            if (onlineModels.isEmpty()) {
+                                isLoadingOnlineModels = true
+                                onlineModelsError = null
+                                scope.launch {
+                                    try {
+                                        onlineModels = WakeWordModelManager.fetchOnlineModels(context)
+                                    } catch (e: Throwable) {
+                                        onlineModelsError = e.message ?: "Failed to load models from GitHub"
+                                    } finally {
+                                        isLoadingOnlineModels = false
+                                    }
+                                }
+                            }
+                        }
+                    ) {
+                        Text("Explore")
+                    }
+                }
+
+                SettingRow(
+                    enabled = isStateOn,
+                    label = "Detection Sensitivity",
+                    description = "Adjust how easily the wake word is detected."
+                ) {
+                    Box {
+                        FilledTonalButton(
+                            onClick = { expandedSensitivity = !expandedSensitivity }
+                        ) {
+                            Text(selectedSensitivityLevel)
+                        }
+
+                        DropdownMenu(
+                            expanded = expandedSensitivity,
+                            onDismissRequest = { expandedSensitivity = false },
+                            offset = DpOffset(
+                                x = 0.dp,
+                                y = 56.dp
+                            )
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 300.dp)
+                                    .verticalScroll(rememberScrollState())
+                            ) {
+                                SENSITIVITY_OPTIONS.forEach { (level, sensitivity) ->
+                                    DropdownMenuItem(
+                                        text = { Text(level) },
+                                        onClick = {
+                                            onSensitivityChange(sensitivity)
+                                            selectedSensitivityLevel = level
+                                            expandedSensitivity = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                SettingRow(
+                    label = "Debug Logcat",
+                    description = "View live system log output."
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            context.startActivity(Intent(context, LogcatActivity::class.java))
+                        }
+                    ) {
+                        Text("Open")
                     }
                 }
 
@@ -557,55 +546,6 @@ fun SettingsScreen(
                         }
                     }
                 }
-
-                HorizontalDivider(color = outline)
-
-                SettingRow(
-                    label = "Record Your Custom Wake Word",
-                    description = "Record at least 3 samples of your custom wake word to train your voice model."
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-
-                        Box {
-                            FilledTonalButton(
-                                onClick = { expandedModels = true }
-                            ) {
-                                Text(selectedModel)
-                            }
-
-                            DropdownMenu(
-                                expanded = expandedModels,
-                                onDismissRequest = { expandedModels = false }
-                            ) {
-                                models.forEach { model ->
-                                    DropdownMenuItem(
-                                        text = { Text(model.nameWithoutExtension) },
-                                        onClick = {
-                                            onModelChanged(model.nameWithoutExtension)
-                                            selectedModel = model.nameWithoutExtension
-                                            expandedModels = false
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                RecordPanel(
-                    phase = recordPhase,
-                    sampleCount = sampleCount,
-                    onStartRecordClick = onStartRecordClick,
-                    onSubmitClick = {
-                        onSubmitClick()
-                        selectedModel = WAKE_WORD_MODEL_NAME
-                    },
-                    onNewClick = onNewClick,
-                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -778,98 +718,189 @@ fun SettingsScreen(
             }
         )
     }
-}
 
-@Composable
-private fun RecordPanel(
-    phase: RecordPhase,
-    sampleCount: Int,
-    onStartRecordClick: () -> Unit,
-    onSubmitClick: () -> Unit,
-    onNewClick: () -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    val isRecording = phase is RecordPhase.Recording
-    val isUploading = phase is RecordPhase.Uploading
-    val isTrained = phase is RecordPhase.Trained
-    val isBusy = isRecording || isUploading
-
-    var recordText by remember { mutableStateOf("Start") }
-    var isWaiting by remember { mutableStateOf(false) }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(14.dp))
-            .padding(16.dp)
-    ) {
-        Text(
-            text = statusText(phase, sampleCount),
-            style = MaterialTheme.typography.bodyMedium
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Button(
-                onClick = {
-                    scope.launch {
-                        isWaiting = true
-                        var timer = 2
-                        repeat(timer) {
-                            recordText = "Wait ${timer - it}..."
-                            delay(1.seconds)
-                        }
-
-                        onStartRecordClick()
-
-                        timer = 3
-                        repeat(timer) {
-                            recordText = "Recording ${timer - it}..."
-                            delay(1.seconds)
-                        }
-
-                        onStartRecordClick()
-                        recordText = "Start"
-                        isWaiting = false
-                    }
-                },
-                enabled = !isWaiting && !isUploading && !isTrained && !isRecording
-            ) {
-                Text(recordText)
-            }
-
-            FilledTonalButton(
-                onClick = onSubmitClick,
-                enabled = !isBusy && !isTrained && sampleCount >= MIN_SAMPLES
-            ) {
-                if (isUploading) {
-                    CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("Submit")
-                }
-            }
-
-            OutlinedButton(
-                onClick = onNewClick,
-                enabled = !isBusy && sampleCount > 0
-            ) {
-                Text("New")
+    if (showDownloadModelsDialog) {
+        val filteredModels = remember(onlineModels, modelSearchQuery, installedModels) {
+            onlineModels.filter { model ->
+                if (modelSearchQuery.isBlank()) true
+                else model.fileName.contains(modelSearchQuery, ignoreCase = true) ||
+                        model.name.contains(modelSearchQuery, ignoreCase = true)
             }
         }
-    }
-}
 
-private fun statusText(phase: RecordPhase, sampleCount: Int): String = when (phase) {
-    RecordPhase.Idle -> "$sampleCount / $MIN_SAMPLES samples recorded"
-    RecordPhase.Recording -> "Recording... speak your word"
-    RecordPhase.Uploading -> "Uploading and training..."
-    is RecordPhase.Trained -> "Model trained — tap New to record again"
-    is RecordPhase.Failure -> "Failed: ${phase.message}"
+        AlertDialog(
+            onDismissRequest = { showDownloadModelsDialog = false },
+            title = {
+                Column {
+                    Text("Download Wake Words")
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Source: Home Assistant Collection (en)",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 250.dp, max = 450.dp)
+                ) {
+                    if (!isLoadingOnlineModels && onlineModelsError == null) {
+                        OutlinedTextField(
+                            value = modelSearchQuery,
+                            onValueChange = { modelSearchQuery = it },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 8.dp),
+                            placeholder = { Text("Search wake words...") },
+                            singleLine = true,
+                            trailingIcon = {
+                                if (modelSearchQuery.isNotEmpty()) {
+                                    IconButton(onClick = { modelSearchQuery = "" }) {
+                                        Icon(Icons.Default.Clear, contentDescription = "Clear search")
+                                    }
+                                }
+                            }
+                        )
+                    }
+
+                    if (isLoadingOnlineModels) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                CircularProgressIndicator()
+                                Spacer(Modifier.height(12.dp))
+                                Text("Loading models from GitHub...")
+                            }
+                        }
+                    } else if (onlineModelsError != null) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Text(
+                                    text = "Error: $onlineModelsError",
+                                    color = MaterialTheme.colorScheme.error,
+                                    style = MaterialTheme.typography.bodyMedium
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Button(onClick = {
+                                    isLoadingOnlineModels = true
+                                    onlineModelsError = null
+                                    scope.launch {
+                                        try {
+                                            onlineModels = WakeWordModelManager.fetchOnlineModels(context)
+                                        } catch (e: Throwable) {
+                                            onlineModelsError = e.message ?: "Failed to load models"
+                                        } finally {
+                                            isLoadingOnlineModels = false
+                                        }
+                                    }
+                                }) {
+                                    Text("Retry")
+                                }
+                            }
+                        }
+                    } else if (filteredModels.isEmpty()) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("No wake word models found.")
+                        }
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .weight(1f)
+                        ) {
+                            items(filteredModels, key = { it.path }) { model ->
+                                val isInstalled = installedModels.any { it.equals(model.name, ignoreCase = true) }
+                                val isDownloading = downloadingModelNames.contains(model.fileName)
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 6.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                        Text(
+                                            text = model.fileName,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                        Text(
+                                            text = "${model.path.substringBeforeLast('/')} • ${Utils.formatFileSize(model.size)}",
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.outline
+                                        )
+                                    }
+
+                                    if (isDownloading) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(24.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                    } else if (isInstalled) {
+                                        FilledTonalButton(
+                                            onClick = {
+                                                selectedModel = model.name
+                                                onModelChanged(model.name)
+                                                Toast.makeText(context, "Selected ${model.name}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        ) {
+                                            Text("Installed")
+                                        }
+                                    } else {
+                                        Button(
+                                            onClick = {
+                                                downloadingModelNames = downloadingModelNames + model.fileName
+                                                scope.launch {
+                                                    val success = WakeWordModelManager.downloadModel(context, model)
+                                                    downloadingModelNames = downloadingModelNames - model.fileName
+                                                    if (success) {
+                                                        installedModels = WakeWordModelManager.getInstalledModels(context)
+                                                        selectedModel = model.name
+                                                        onModelChanged(model.name)
+                                                        Toast.makeText(context, "Downloaded and selected ${model.fileName}", Toast.LENGTH_SHORT).show()
+                                                    } else {
+                                                        Toast.makeText(context, "Failed to download ${model.fileName}", Toast.LENGTH_SHORT).show()
+                                                    }
+                                                }
+                                            }
+                                        ) {
+                                            Text("Download")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                OutlinedButton(onClick = { showDownloadModelsDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -890,6 +921,7 @@ private fun TitlePill(text: String, modifier: Modifier = Modifier) {
 
 @Composable
 private fun SettingRow(
+    enabled: Boolean = true,
     label: String,
     description: String = "",
     content: @Composable () -> Unit
@@ -912,10 +944,18 @@ private fun SettingRow(
                 )
             }
         }
-
-        content()
+        if (enabled) {
+            content()
+        }
     }
 }
+
+private val SENSITIVITY_OPTIONS: List<Pair<String, Float>> = listOf(
+    "Easiest"   to 0.05f,
+    "Easy"      to 0.2f,
+    "Balanced"  to 0.5f,
+    "Strict"    to 0.7f
+)
 
 @Preview(showBackground = true, widthDp = 480, heightDp = 480)
 @Composable
@@ -924,8 +964,7 @@ private fun SettingsScreenPreview() {
 
     MaterialTheme {
         SettingsScreen(
-            onStateToggle = { stateOn = it },
-            sampleCount = 2,
+            onStateToggle = { stateOn = it }
         )
     }
 }

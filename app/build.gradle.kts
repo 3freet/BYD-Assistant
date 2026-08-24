@@ -8,7 +8,21 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-val runNumber = providers.environmentVariable("GITHUB_RUN_NUMBER").orElse("0")
+val appVersionCode = 4
+val appVersionName = "1.0.3"
+
+val betaTags = providers.provider {
+    providers.exec {
+        commandLine("git", "tag", "-l", "v${appVersionName}-beta.*")
+    }.standardOutput.asText.get().trim()
+}
+val betaNumber = betaTags.map { tags ->
+    tags.lineSequence()
+        .mapNotNull { it.substringAfter("-beta.").toIntOrNull() }
+        .maxOrNull()
+        ?.plus(1)
+        ?: 1
+}
 
 android {
     namespace = "com.kangrio.byd.assistant"
@@ -20,10 +34,10 @@ android {
         applicationId = "com.kangrio.byd.assistant"
         minSdk = 24
         targetSdk = 37
-        versionCode = 3
-        versionName = "1.0.2"
+        versionCode = appVersionCode
+        versionName = appVersionName
         ndk {
-            abiFilters += listOf("armeabi-v7a", "arm64-v8a", "x86_64")
+            abiFilters += listOf("arm64-v8a")
         }
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -48,6 +62,8 @@ android {
         release {
             optimization {
                 enable = true
+                isMinifyEnabled = true
+                isShrinkResources = true
             }
             signingConfig = if (file("signing.properties").exists()) {
                 signingConfigs.getByName("release")
@@ -58,7 +74,8 @@ android {
 
         register("beta") {
             initWith(getByName("release"))
-            versionNameSuffix = "-beta.${runNumber.get()}"
+            matchingFallbacks += listOf("release")
+            versionNameSuffix = "-beta.${betaNumber.get()}"
         }
     }
     compileOptions {
@@ -67,9 +84,6 @@ android {
     }
     buildFeatures {
         compose = true
-    }
-    sourceSets["main"].apply {
-        jniLibs.srcDirs("src/main/jniLibs")
     }
 }
 
@@ -91,6 +105,9 @@ dependencies {
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
     implementation(libs.accompanist.drawablepainter)
+    implementation(project(":androidwakeword"))
+
+    compileOnly(libs.onnxruntime.android)
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

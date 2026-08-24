@@ -152,7 +152,7 @@ fun PermissionOnboardingScreen(
     ) { granted ->
         isMicGranted = granted
         if (!granted) {
-            Toast.makeText(context, "Microphone permission is required for voice commands", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, "Microphone permission is recommended for voice commands", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -198,10 +198,10 @@ fun PermissionOnboardingScreen(
                 title = "Microphone Access",
                 category = "Core Voice Detection",
                 description = "Allows Assistant to capture wake word detection and process speech commands.",
-                detailedReason = "Without microphone access, hotword detection ('Hey Rio') and voice command recognition cannot operate.",
+                detailedReason = "Without microphone access, hotword detection and voice command recognition cannot operate.",
                 icon = Icons.Default.Mic,
                 isGranted = isMicGranted,
-                isRequired = true,
+                isRequired = false,
                 actionText = if (isMicGranted) "Granted" else "Grant Microphone Access",
                 onAction = {
                     micPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
@@ -254,7 +254,7 @@ fun PermissionOnboardingScreen(
                 detailedReason = "Android requires WRITE_SECURE_SETTINGS permission to set system voice keys. Grantable automatically via local ADB socket or command.",
                 icon = Icons.Default.Security,
                 isGranted = isWriteSecureSettingsGranted,
-                isRequired = true,
+                isRequired = Utils.isDilink(),
                 manualAdbCommand = "adb shell pm grant ${context.packageName} ${Manifest.permission.WRITE_SECURE_SETTINGS}",
                 actionText = if (isWriteSecureSettingsGranted) "Permission Granted" else "Grant via Local ADB",
                 onAction = {
@@ -280,7 +280,7 @@ fun PermissionOnboardingScreen(
                 actionText = if (selectedAssistant.name.isNotEmpty()) "Selected: ${selectedAssistant.name}" else "Select Assistant App",
                 onAction = {
                     if (assistantApps.isNotEmpty()) {
-                        if (!isWriteSecureSettingsGranted) {
+                        if (!isWriteSecureSettingsGranted && Utils.isDilink()) {
                             Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
                             return@OnboardingPermissionItem
                         }
@@ -303,7 +303,7 @@ fun PermissionOnboardingScreen(
                     detailedReason = "Android 13+ requires notification permission for foreground services with microphone access.",
                     icon = Icons.Default.Notifications,
                     isGranted = isNotificationGranted,
-                    isRequired = false,
+                    isRequired = true,
                     actionText = if (isNotificationGranted) "Granted" else "Allow Notifications",
                     onAction = {
                         notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -315,8 +315,8 @@ fun PermissionOnboardingScreen(
         list
     }
 
-    val totalPermissions = permissionItems.size
-    val grantedCount = permissionItems.count { it.isGranted }
+    val totalPermissions = permissionItems.filter { it.isRequired }.size
+    val grantedCount = permissionItems.count { it.isRequired && it.isGranted }
     val progress = if (totalPermissions > 0) grantedCount.toFloat() / totalPermissions.toFloat() else 0f
     val isAllGranted = grantedCount == totalPermissions
 
@@ -693,6 +693,7 @@ fun WizardView(
 
             if (validIndex < items.size - 1) {
                 Button(
+                    enabled = !item.isRequired || item.isGranted,
                     onClick = { onStepChange(validIndex + 1) }
                 ) {
                     Text("Next")
