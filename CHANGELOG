@@ -1,3 +1,17 @@
+- 1.0.3
+  • Migrate wake-word detection engine from Snowboy to AndroidWakeWord to reduce false triggers
+    • Recommended to clear app data after updated to this version
+    • Warning: Previously trained Snowboy models (.pmdl) will no longer be usable with the new engine
+  • Support downloading, importing, and loading online/custom wake-word models from app data
+    • Can delete imported model with long press on model
+  • Implement fallback to default model when specified wake-word model is missing
+  • Pause wake-word detection during assistant activation with a 5s debounce
+  • Implement Logcat viewer activity with batched UI updates
+  • Prevent activity recreation on orientation change and set StartActivity launchMode to singleTask
+  • Add built-in Logcat viewer activity with batched UI updates
+  • Add ADB connection status toast notifications on the main thread
+  • Fix DiLink detection logic
+
 - v1.0.2
   • In-App Updates: Added OTA updates via GitHub Releases.
   • Offline Wake Word: Added Snowboy hotword detection (hey_rio, alexa, snowboy) with gain and sensitivity controls.
