@@ -207,6 +207,9 @@ object WakeWordModelManager {
     }
 
     fun deleteModel(context: Context, modelName: String): Boolean {
+        val isBuiltInModel = isBuiltInModel(context, modelName)
+        if (isBuiltInModel) return false
+
         val file = File(getModelsDir(context), "$modelName.onnx")
         return if (file.exists()) file.delete() else false
     }

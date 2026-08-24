@@ -11,11 +11,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -122,6 +124,7 @@ class SettingsActivity : ComponentActivity() {
                         onPlayDingToggle = { state -> Preferences.playDingOnStart = state },
                         onSensitivityChange = { VoiceWakeService.setSensitivity(this, it) },
                         onModelChanged = { model -> VoiceWakeService.setModel(this, model) },
+                        onModelDelete = { model ->  onModelDelete(model) },
                     )
                 }
             }
@@ -150,6 +153,16 @@ class SettingsActivity : ComponentActivity() {
             requestMicPermissionWakeWord.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
+
+    private fun onModelDelete(model: String): Boolean {
+        val success = WakeWordModelManager.deleteModel(this, model)
+        if (success) {
+            Toast.makeText(this, "Deleted $model", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Failed to delete $model (Build-in model or not exist.)", Toast.LENGTH_SHORT).show()
+        }
+        return success
+    }
 }
 
 /**
@@ -166,6 +179,7 @@ fun SettingsScreen(
     onPlayDingToggle: (Boolean) -> Unit = {},
     onSensitivityChange: (Float) -> Unit = {},
     onModelChanged: (String) -> Unit = { _-> },
+    onModelDelete: (String) -> Boolean = { _ -> false },
 ) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -355,12 +369,30 @@ fun SettingsScreen(
                         ) {
                             installedModels.forEach { model ->
                                 DropdownMenuItem(
-                                    text = { Text(model) },
-                                    onClick = {
-                                        onModelChanged(model)
-                                        selectedModel = model
-                                        expandedModels = false
-                                    }
+                                    text = {
+                                        Text(
+                                            text = model,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .fillMaxHeight()
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        onModelChanged(model)
+                                                        selectedModel = model
+                                                        expandedModels = false
+                                                    },
+                                                    onLongClick = {
+                                                        if (selectedModel != model) {
+                                                            val success = onModelDelete(model)
+                                                            if (success) {
+                                                                installedModels = WakeWordModelManager.getInstalledModels(context)
+                                                            }
+                                                        }
+                                                    }
+                                            ),
+                                        )
+                                    },
+                                    onClick = { }
                                 )
                             }
                         }
