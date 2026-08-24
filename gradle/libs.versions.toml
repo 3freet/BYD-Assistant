@@ -14,7 +14,7 @@ materialIconsExtended = "1.7.8"
 dadb = "2.0.0"
 okhttp = "5.4.0"
 retrofit = "3.0.0"
-onnxruntimeAndroid = "1.25.1"
+onnxruntimeAndroid = "1.23.2"
 
 [libraries]
 accompanist-drawablepainter = { module = "com.google.accompanist:accompanist-drawablepainter", version.ref = "accompanistDrawablepainter" }
