@@ -98,7 +98,7 @@ object OtaUpdater {
         }
 
         try {
-            val release = gitHubApi.getLatestRelease(owner = "kangrio", repo = "Assistant")
+            val release = gitHubApi.getLatestRelease(owner = "3freet", repo = "BYD-Assistant")
             Preferences.lastOtaCheckTime = System.currentTimeMillis()
 
             val apkAsset = release.assets.firstOrNull { asset ->

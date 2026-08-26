@@ -14,6 +14,7 @@ import android.os.Looper
 import android.util.Log
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import androidx.core.content.ContextCompat
 import com.kangrio.byd.assistant.R
 import com.kangrio.byd.assistant.activity.SettingsActivity
 import com.kangrio.byd.assistant.util.Preferences
@@ -50,7 +51,7 @@ class VoiceWakeService : Service() {
         createNotificationChannel()
 
         val filter = IntentFilter(Intent.ACTION_SCREEN_ON)
-        registerReceiver(screenReceiver, filter)
+        ContextCompat.registerReceiver(this, screenReceiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
 
         OtaUpdater.checkUpdateInBackground(this, force = false)
 

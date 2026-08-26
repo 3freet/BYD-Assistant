@@ -113,15 +113,28 @@ object WakeWordModelManager {
             }
 
             val targetFile = File(getModelsDir(context), fileName)
-            validate(targetFile.absolutePath)
+            val tempFile = File(getModelsDir(context), "$fileName.importing")
 
             val inputStream = context.contentResolver.openInputStream(uri)
                 ?: return@withContext Result.failure(IllegalStateException("Failed to open file stream."))
 
             inputStream.use { input ->
-                FileOutputStream(targetFile).use { output ->
+                FileOutputStream(tempFile).use { output ->
                     input.copyTo(output)
                 }
+            }
+
+            try {
+                validate(tempFile.absolutePath)
+            } catch (e: Throwable) {
+                tempFile.delete()
+                throw e
+            }
+
+            if (targetFile.exists()) targetFile.delete()
+            if (!tempFile.renameTo(targetFile)) {
+                tempFile.copyTo(targetFile, overwrite = true)
+                tempFile.delete()
             }
 
             val modelName = fileName.removeSuffix(".onnx")
