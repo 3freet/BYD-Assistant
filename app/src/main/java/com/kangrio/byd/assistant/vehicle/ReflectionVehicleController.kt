@@ -1,21 +1,28 @@
 package com.kangrio.byd.assistant.vehicle
 
 import android.content.Context
+import android.os.IBinder
+import android.os.Parcel
 import android.util.Log
+import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.lang.reflect.InvocationTargetException
 
 /**
- * **Phase 2 / experimental — not wired in as the default [VehicleController].**
+ * **Experimental — only wired in as the real dispatcher when the user explicitly arms it** (see
+ * the "Enable experimental vehicle control" setting). Nothing here has been confirmed to actually
+ * move anything in a real car yet; this makes no root/process-fork assumptions, matching the
+ * user's own observation that other real apps invoke these controls without root.
  *
- * Attempts the actual BYD HAL call from this app's own process. Nothing in the source research
- * this was built from demonstrates a working invocation for either call shape below, and the
- * user has separately confirmed the documented "requires root" claim doesn't match what they've
- * observed from other real apps — so this makes no root/process-fork assumptions. Instead it
- * tries both plausible shapes and reports back a specific [VehicleDispatchError] so the real
- * mechanism (and whether any permission grant is needed — see [com.kangrio.byd.assistant.util.Utils.adbRequestPermission])
- * can be determined empirically on real hardware.
+ * Two independent, evidenced invocation shapes are attempted, matching how a real, shipped BYD
+ * DiLink app (i99dash) does it:
+ *  - [VehicleInvocation.GenericFeatureSet]/[VehicleInvocation.NamedMethod] — reflection onto the
+ *    `android.hardware.bydauto.<device>.BYDAuto<Device>Device` HAL classes.
+ *  - [VehicleInvocation.AcBinderProperty] — a raw Binder transaction against a named sub-service
+ *    of the `"byd_airconditioning"` system service, confirmed byte-for-byte from i99dash's own AC
+ *    control code. For CLIMATE commands, the generic route is tried first (cheap, and its HAL
+ *    class might exist under a name not yet found), falling back to this confirmed mechanism.
  *
  * No getter/read-back exists anywhere in the source research: [VehicleDispatchResult.Success]
  * here only ever means "the call did not throw," never "the car actually moved."
@@ -26,10 +33,41 @@ class ReflectionVehicleController(private val context: Context) : VehicleControl
     override suspend fun dispatch(command: VehicleCommand, value: Int): VehicleDispatchResult {
         VehicleSafety.assertDispatchAllowed(command)
 
+        val result = withContext(Dispatchers.IO) {
+            when (val invocation = command.invocation) {
+                is VehicleInvocation.NamedMethod -> tryNamedMethod(invocation, value)
+                VehicleInvocation.GenericFeatureSet -> tryGenericSet(command, value)
+                is VehicleInvocation.AcBinderProperty -> {
+                    val generic = tryGenericSet(command, value)
+                    if (generic is VehicleDispatchResult.Success) generic
+                    else tryAcBinderProperty(invocation, command, value)
+                }
+            }
+        }
+
+        if (result is VehicleDispatchResult.Failure && result.error == VehicleDispatchError.SECURITY_DENIED) {
+            return retryAfterPermissionGrant(command, value, result)
+        }
+        return result
+    }
+
+    /** On a `SecurityException`, its message typically names the missing permission — try to grant it via the
+     * existing local-ADB mechanism and retry once. Still just as unconfirmed as everything else here;
+     * this only reduces one specific, previously-anticipated failure mode to a single retry. */
+    private suspend fun retryAfterPermissionGrant(
+        command: VehicleCommand,
+        value: Int,
+        original: VehicleDispatchResult.Failure,
+    ): VehicleDispatchResult {
+        val permission = original.detail?.let { PERMISSION_NAME_REGEX.find(it)?.value } ?: return original
+        Log.i(TAG, "Security denied for ${command.id}, attempting to grant $permission via ADB and retrying")
+        Utils.adbRequestPermission(context, permission)
+        instanceCache.clear()
         return withContext(Dispatchers.IO) {
             when (val invocation = command.invocation) {
                 is VehicleInvocation.NamedMethod -> tryNamedMethod(invocation, value)
                 VehicleInvocation.GenericFeatureSet -> tryGenericSet(command, value)
+                is VehicleInvocation.AcBinderProperty -> tryAcBinderProperty(invocation, command, value)
             }
         }
     }
@@ -78,6 +116,8 @@ class ReflectionVehicleController(private val context: Context) : VehicleControl
 
         // The generic route's owning device class isn't recorded per-command since it's shared
         // across a whole service group; resolve by domain instead of a hardcoded class guess.
+        // CLIMATE deliberately has no entry here — the guessed BYDAutoAcDevice class has zero
+        // evidence of existing, and a real shipped app uses AcBinderProperty for AC instead.
         val className = GENERIC_ROUTE_CLASS_BY_DOMAIN[command.domain] ?: return VehicleDispatchResult.Failure(
             VehicleDispatchError.CLASS_NOT_FOUND, "No known HAL class for domain ${command.domain}"
         )
@@ -112,6 +152,83 @@ class ReflectionVehicleController(private val context: Context) : VehicleControl
         }
     }
 
+    /**
+     * The confirmed AC mechanism (from i99dash's `smali/a/g0.1.smali`): resolve the
+     * `"byd_airconditioning"` service via the hidden `ServiceManager.getService()` API (no root —
+     * same hidden-but-unprotected-API category as [tryGenericSet]), resolve a named sub-binder via
+     * a `getSub(subServiceKey)` transaction (code 3) on the master binder, then issue a generic
+     * `(id, area, value)` property-set transaction (also code 3) on that sub-binder. `id` is
+     * [VehicleCommand.featureId] — the same numbering scheme is reused across the "set" and the
+     * generic-route ID space, not a per-control transaction code.
+     */
+    private fun tryAcBinderProperty(
+        invocation: VehicleInvocation.AcBinderProperty,
+        command: VehicleCommand,
+        value: Int,
+    ): VehicleDispatchResult {
+        val id = command.featureId
+            ?: return VehicleDispatchResult.Failure(VehicleDispatchError.INVALID_ARGUMENT, "Missing featureId for ${command.id}")
+
+        return try {
+            val master = getAcServiceBinder() ?: return VehicleDispatchResult.Failure(
+                VehicleDispatchError.CLASS_NOT_FOUND, "System service '$AC_SERVICE_NAME' not found"
+            )
+            val subBinder = getSubBinder(master, invocation.subServiceKey) ?: return VehicleDispatchResult.Failure(
+                VehicleDispatchError.SUB_SERVICE_NOT_FOUND, "Sub-service '${invocation.subServiceKey}' not resolved"
+            )
+            setAcProperty(subBinder, invocation.interfaceDescriptor, id, invocation.area, value)
+            VehicleDispatchResult.Success()
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Security denied dispatching ${command.id} via AcBinderProperty", e)
+            VehicleDispatchResult.Failure(VehicleDispatchError.SECURITY_DENIED, e.message)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Unexpected error dispatching ${command.id} via AcBinderProperty", e)
+            VehicleDispatchResult.Failure(VehicleDispatchError.UNKNOWN, e.message)
+        }
+    }
+
+    /** `android.os.ServiceManager` is `@hide` (not root-gated) — reflection is the only way in. */
+    private fun getAcServiceBinder(): IBinder? {
+        val serviceManagerClass = Class.forName("android.os.ServiceManager")
+        return serviceManagerClass.getMethod("getService", String::class.java)
+            .invoke(null, AC_SERVICE_NAME) as? IBinder
+    }
+
+    private fun getSubBinder(master: IBinder, subServiceKey: String): IBinder? {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(AC_MASTER_INTERFACE_DESCRIPTOR)
+            data.writeString(subServiceKey)
+            master.transact(TRANSACT_GET_SUB, data, reply, 0)
+            reply.readException()
+            return reply.readStrongBinder()
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+
+    /** Confirmed Parcel shape for a "set" call, shared across every `com.byd.ac.*` sub-interface:
+     * `writeInterfaceToken, writeInt(count=1), writeInt(id), writeInt(area), writeString(typeName), writeValue(boxed)`. */
+    private fun setAcProperty(subBinder: IBinder, interfaceDescriptor: String, id: Int, area: Int, value: Int) {
+        val data = Parcel.obtain()
+        val reply = Parcel.obtain()
+        try {
+            data.writeInterfaceToken(interfaceDescriptor)
+            data.writeInt(1)
+            data.writeInt(id)
+            data.writeInt(area)
+            data.writeString("java.lang.Integer")
+            data.writeValue(value)
+            subBinder.transact(TRANSACT_SET_PROPERTY, data, reply, 0)
+            reply.readException()
+        } finally {
+            data.recycle()
+            reply.recycle()
+        }
+    }
+
     /** Tries a static `getInstance(Context)` first, falling back to a no-arg constructor. */
     private fun getOrCreateInstance(className: String): Any? = instanceCache.getOrPut(className) {
         val clazz = Class.forName(className)
@@ -134,8 +251,19 @@ class ReflectionVehicleController(private val context: Context) : VehicleControl
     companion object {
         private const val TAG = "VehicleController"
 
+        private const val AC_SERVICE_NAME = "byd_airconditioning"
+
+        // Captured from an earlier research pass on the same source (i99dash's g0.1.smali) — not
+        // reconfirmed in the final follow-up pass. Verify this literal against the class's
+        // top-of-file interface-token constants before relying on it against real hardware.
+        private const val AC_MASTER_INTERFACE_DESCRIPTOR = "com.byd.ac.IBydAcService"
+
+        private const val TRANSACT_GET_SUB = 3
+        private const val TRANSACT_SET_PROPERTY = 3
+
+        private val PERMISSION_NAME_REGEX = Regex("[a-zA-Z_]+\\.permission\\.[A-Z_]+")
+
         private val GENERIC_ROUTE_CLASS_BY_DOMAIN = mapOf(
-            VehicleDomain.CLIMATE to "android.hardware.bydauto.ac.BYDAutoAcDevice",
             VehicleDomain.BODYWORK to "android.hardware.bydauto.bodywork.BYDAutoBodyworkDevice",
             VehicleDomain.AUDIO to "android.hardware.bydauto.audio.BYDAutoAudioDevice",
             VehicleDomain.SETTING to "android.hardware.bydauto.setting.BYDAutoSettingDevice",

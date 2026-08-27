@@ -11,6 +11,7 @@ import com.kangrio.byd.assistant.standalone.tts.TtsResult
 import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.SecureCredentials
 import com.kangrio.byd.assistant.vehicle.LoggingVehicleController
+import com.kangrio.byd.assistant.vehicle.ReflectionVehicleController
 import com.kangrio.byd.assistant.vehicle.VehicleCommandRouter
 import com.kangrio.byd.assistant.vehicle.VehicleConfirmationPhrases
 import com.kangrio.byd.assistant.vehicle.VehicleController
@@ -23,8 +24,15 @@ import com.kangrio.byd.assistant.vehicle.VehicleSafety
 object StandaloneAssistantController {
     private const val TAG = "StandaloneAssistant"
 
-    /** Swappable seam for tests and for Phase 2's [com.kangrio.byd.assistant.vehicle.ReflectionVehicleController]. */
-    var vehicleController: VehicleController = LoggingVehicleController
+    /** Test-injection seam. When null (the default), the controller is chosen fresh on every
+     * dispatch from [Preferences.vehicleControlEnabled] — so flipping the settings toggle takes
+     * effect immediately, without an app restart. */
+    var vehicleControllerOverride: VehicleController? = null
+
+    private fun resolveVehicleController(context: Context): VehicleController =
+        vehicleControllerOverride
+            ?: if (Preferences.vehicleControlEnabled) ReflectionVehicleController(context.applicationContext)
+            else LoggingVehicleController
 
     suspend fun runSession(context: Context, onStatus: (String) -> Unit) {
         val languageTag = Preferences.assistantLanguage.bcp47.ifEmpty { null }
@@ -44,7 +52,7 @@ object StandaloneAssistantController {
         if (matched != null) {
             onStatus("Vehicle command: ${matched.command.displayName}")
             VehicleSafety.assertDispatchAllowed(matched.command)
-            val result = vehicleController.dispatch(matched.command, matched.value)
+            val result = resolveVehicleController(context).dispatch(matched.command, matched.value)
             val spoken = VehicleConfirmationPhrases.confirmationFor(matched, result, languageTag)
             onStatus("Speaking…")
             val ttsResult = AndroidTextToSpeechEngine(context).speak(spoken, languageTag)

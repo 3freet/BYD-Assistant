@@ -64,6 +64,13 @@ object Preferences {
         get() = prefs.getBoolean(Constant.PREFS_PLAY_DING_ON_START, true)
         set(value) = prefs.edit { putBoolean(Constant.PREFS_PLAY_DING_ON_START, value) }
 
+    /** Default off: arms [com.kangrio.byd.assistant.vehicle.ReflectionVehicleController] as the real
+     * dispatcher for matched vehicle commands, in place of the safe logging-only stub. Neither
+     * invocation mechanism it tries is confirmed on real hardware yet. */
+    var vehicleControlEnabled: Boolean
+        get() = prefs.getBoolean(Constant.PREFS_VEHICLE_CONTROL_ENABLED, false)
+        set(value) = prefs.edit { putBoolean(Constant.PREFS_VEHICLE_CONTROL_ENABLED, value) }
+
     var lastOtaCheckTime: Long
         get() = prefs.getLong(Constant.PREFS_LAST_OTA_CHECK_TIME, 0L)
         set(value) = prefs.edit { putLong(Constant.PREFS_LAST_OTA_CHECK_TIME, value) }

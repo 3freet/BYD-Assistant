@@ -21,5 +21,8 @@ enum class VehicleDispatchError {
     SECURITY_DENIED,
     INVOCATION_FAILED,
     INVALID_ARGUMENT,
+    /** The `"byd_airconditioning"` master service, or a named sub-service resolved from it via
+     * `getSub()`, could not be found — see [VehicleInvocation.AcBinderProperty]. */
+    SUB_SERVICE_NOT_FOUND,
     UNKNOWN,
 }

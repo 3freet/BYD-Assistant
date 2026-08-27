@@ -134,6 +134,7 @@ class SettingsActivity : ComponentActivity() {
                         initialOtaRelease = otaRelease,
                         onStateToggle = { state -> onStateToggle(state) },
                         onPlayDingToggle = { state -> Preferences.playDingOnStart = state },
+                        onVehicleControlToggle = { state -> Preferences.vehicleControlEnabled = state },
                         onAudioSourceChange = { source -> VoiceWakeService.setAudioSource(this, source) },
                         onSensitivityChange = { VoiceWakeService.setSensitivity(this, it) },
                         onModelChanged = { model -> VoiceWakeService.setModel(this, model) },
@@ -197,6 +198,7 @@ fun SettingsScreen(
     initialOtaRelease: ReleaseInfo? = null,
     onStateToggle: (Boolean) -> Unit,
     onPlayDingToggle: (Boolean) -> Unit = {},
+    onVehicleControlToggle: (Boolean) -> Unit = {},
     onAudioSourceChange: (Int) -> Unit = {},
     onSensitivityChange: (Float) -> Unit = {},
     onModelChanged: (String) -> Unit = { _-> },
@@ -361,6 +363,7 @@ fun SettingsScreen(
 
     var isStateOn by remember { mutableStateOf(Preferences.startHotword) }
     var isPlayDing by remember { mutableStateOf(Preferences.playDingOnStart) }
+    var isVehicleControlEnabled by remember { mutableStateOf(Preferences.vehicleControlEnabled) }
 
     var isCheckingUpdate by remember { mutableStateOf(false) }
     var availableUpdate by remember { mutableStateOf<ReleaseInfo?>(initialOtaRelease) }
@@ -543,6 +546,23 @@ fun SettingsScreen(
                                 }
                             }
                         }
+                    }
+
+                    SettingRow(
+                        label = "Vehicle Control (Experimental)",
+                        description = "Actually invoke recognized car controls (windows, A/C, etc.) instead of just logging them. Not confirmed to work on real hardware yet."
+                    ) {
+                        Switch(
+                            checked = isVehicleControlEnabled,
+                            onCheckedChange = {
+                                isVehicleControlEnabled = it
+                                onVehicleControlToggle(it)
+                            },
+                            modifier = Modifier.semantics {
+                                contentDescription =
+                                    "Vehicle control toggle, ${if (isVehicleControlEnabled) "on" else "off"}"
+                            }
+                        )
                     }
                 }
 

@@ -1,0 +1,518 @@
+[
+  {
+    "id": "ac.power",
+    "domain": "CLIMATE",
+    "displayName": "A/C power",
+    "deviceType": 1000,
+    "featureId": 501219364,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_AIRCONDITIONER_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcAirConditioner"
+    },
+    "parameter": { "type": "fixedEnum", "options": { "on": 1, "off": 0 } },
+    "intents": [
+      {
+        "type": "fixedValue",
+        "value": 1,
+        "phrases": {
+          "en": ["turn on the ac", "turn on the air conditioning", "turn the ac on", "ac on", "switch on the ac"],
+          "ar": ["شغل المكيف", "شغل التكييف", "افتح المكيف"]
+        },
+        "confirmation": { "en": "Turning on the A/C.", "ar": "تم تشغيل المكيف." }
+      },
+      {
+        "type": "fixedValue",
+        "value": 0,
+        "phrases": {
+          "en": ["turn off the ac", "turn off the air conditioning", "turn the ac off", "ac off", "switch off the ac"],
+          "ar": ["اطفئ المكيف", "أطفئ المكيف", "اغلق المكيف", "أغلق المكيف"]
+        },
+        "confirmation": { "en": "Turning off the A/C.", "ar": "تم إطفاء المكيف." }
+      }
+    ]
+  },
+  {
+    "id": "ac.temperature",
+    "domain": "CLIMATE",
+    "displayName": "A/C temperature",
+    "deviceType": 1000,
+    "featureId": 501219368,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_AIRCONDITIONER_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcAirConditioner"
+    },
+    "parameter": { "type": "range", "min": 17, "max": 33, "unit": "°C" },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set the temperature to", "set the ac temperature to", "set ac to", "change the temperature to"],
+          "ar": ["اضبط درجة الحرارة على", "غير درجة الحرارة الى", "خلي الحرارة على"]
+        },
+        "confirmation": { "en": "Setting the temperature to %d degrees.", "ar": "تم ضبط درجة الحرارة على %d درجة." }
+      }
+    ]
+  },
+  {
+    "id": "ac.fan",
+    "domain": "CLIMATE",
+    "displayName": "A/C fan level",
+    "deviceType": 1000,
+    "featureId": 501219340,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_AIRCONDITIONER_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcAirConditioner"
+    },
+    "parameter": { "type": "range", "min": 0, "max": 7 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set the fan speed to", "set fan level to", "change fan speed to", "set the ac fan to"],
+          "ar": ["اضبط سرعة المروحة على", "غير سرعة المروحة الى"]
+        },
+        "confirmation": { "en": "Setting the fan speed to %d.", "ar": "تم ضبط سرعة المروحة على %d." }
+      }
+    ]
+  },
+  {
+    "id": "ac.windMode",
+    "domain": "CLIMATE",
+    "displayName": "A/C air direction",
+    "deviceType": 1000,
+    "featureId": 501219336,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_AIRCONDITIONER_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcAirConditioner"
+    },
+    "parameter": {
+      "type": "fixedEnum",
+      "options": { "face": 1, "faceAndFeet": 2, "feet": 3, "feetAndDefrost": 4, "defrost": 5 }
+    },
+    "intents": [
+      {
+        "type": "fixedValue",
+        "value": 1,
+        "phrases": { "en": ["set the ac to face", "blow air to my face", "wind mode face"], "ar": ["اضبط اتجاه الهواء على الوجه"] },
+        "confirmation": { "en": "Setting the air direction to face.", "ar": "تم ضبط اتجاه الهواء على الوجه." }
+      },
+      {
+        "type": "fixedValue",
+        "value": 2,
+        "phrases": { "en": ["set the ac to face and feet", "wind mode face and feet"], "ar": ["اضبط اتجاه الهواء على الوجه والقدم"] },
+        "confirmation": { "en": "Setting the air direction to face and feet.", "ar": "تم ضبط اتجاه الهواء على الوجه والقدم." }
+      },
+      {
+        "type": "fixedValue",
+        "value": 3,
+        "phrases": { "en": ["set the ac to feet", "blow air to my feet", "wind mode feet"], "ar": ["اضبط اتجاه الهواء على القدم"] },
+        "confirmation": { "en": "Setting the air direction to feet.", "ar": "تم ضبط اتجاه الهواء على القدم." }
+      },
+      {
+        "type": "fixedValue",
+        "value": 4,
+        "phrases": { "en": ["set the ac to feet and defrost", "wind mode feet and defrost"], "ar": ["اضبط اتجاه الهواء على القدم وإزالة الضباب"] },
+        "confirmation": { "en": "Setting the air direction to feet and defrost.", "ar": "تم ضبط اتجاه الهواء على القدم وإزالة الضباب." }
+      },
+      {
+        "type": "fixedValue",
+        "value": 5,
+        "phrases": { "en": ["set the ac to defrost", "defrost the windshield", "wind mode defrost"], "ar": ["شغل إزالة الضباب"] },
+        "confirmation": { "en": "Turning on the defroster.", "ar": "تم تشغيل إزالة الضباب." }
+      }
+    ]
+  },
+  {
+    "id": "window.driver",
+    "domain": "BODYWORK",
+    "displayName": "Driver window",
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "invocation": { "type": "genericFeatureSet" },
+    "parameter": { "type": "fixedEnum", "options": { "open": 1, "close": 2, "stop": 3, "half": 4, "breath": 5 } },
+    "intents": [
+      {
+        "type": "fixedValue", "value": 1,
+        "phrases": { "en": ["open the driver window", "roll down the driver window"], "ar": ["افتح نافذة السائق"] },
+        "confirmation": { "en": "Opening the driver window.", "ar": "جارِ فتح نافذة السائق." }
+      },
+      {
+        "type": "fixedValue", "value": 2,
+        "phrases": { "en": ["close the driver window", "roll up the driver window"], "ar": ["اغلق نافذة السائق", "أغلق نافذة السائق"] },
+        "confirmation": { "en": "Closing the driver window.", "ar": "جارِ إغلاق نافذة السائق." }
+      },
+      {
+        "type": "fixedValue", "value": 3,
+        "phrases": { "en": ["stop the driver window"], "ar": ["أوقف نافذة السائق", "وقف نافذة السائق"] },
+        "confirmation": { "en": "Stopping the driver window.", "ar": "تم إيقاف نافذة السائق." }
+      }
+    ]
+  },
+  {
+    "id": "window.passenger",
+    "domain": "BODYWORK",
+    "displayName": "Passenger window",
+    "deviceType": 1001,
+    "featureId": 1125122107,
+    "invocation": { "type": "genericFeatureSet" },
+    "parameter": { "type": "fixedEnum", "options": { "open": 1, "close": 2, "stop": 3, "half": 4, "breath": 5 } },
+    "intents": [
+      {
+        "type": "fixedValue", "value": 1,
+        "phrases": { "en": ["open the passenger window", "roll down the passenger window"], "ar": ["افتح نافذة الراكب"] },
+        "confirmation": { "en": "Opening the passenger window.", "ar": "جارِ فتح نافذة الراكب." }
+      },
+      {
+        "type": "fixedValue", "value": 2,
+        "phrases": { "en": ["close the passenger window", "roll up the passenger window"], "ar": ["اغلق نافذة الراكب", "أغلق نافذة الراكب"] },
+        "confirmation": { "en": "Closing the passenger window.", "ar": "جارِ إغلاق نافذة الراكب." }
+      },
+      {
+        "type": "fixedValue", "value": 3,
+        "phrases": { "en": ["stop the passenger window"], "ar": ["أوقف نافذة الراكب", "وقف نافذة الراكب"] },
+        "confirmation": { "en": "Stopping the passenger window.", "ar": "تم إيقاف نافذة الراكب." }
+      }
+    ]
+  },
+  {
+    "id": "window.rearLeft",
+    "domain": "BODYWORK",
+    "displayName": "Rear-left window",
+    "deviceType": 1001,
+    "featureId": 1125122112,
+    "invocation": { "type": "genericFeatureSet" },
+    "parameter": { "type": "fixedEnum", "options": { "open": 1, "close": 2, "stop": 3, "half": 4, "breath": 5 } },
+    "intents": [
+      {
+        "type": "fixedValue", "value": 1,
+        "phrases": { "en": ["open the rear left window", "roll down the rear left window", "open the back left window"], "ar": ["افتح النافذة الخلفية اليسرى"] },
+        "confirmation": { "en": "Opening the rear left window.", "ar": "جارِ فتح النافذة الخلفية اليسرى." }
+      },
+      {
+        "type": "fixedValue", "value": 2,
+        "phrases": { "en": ["close the rear left window", "roll up the rear left window", "close the back left window"], "ar": ["اغلق النافذة الخلفية اليسرى", "أغلق النافذة الخلفية اليسرى"] },
+        "confirmation": { "en": "Closing the rear left window.", "ar": "جارِ إغلاق النافذة الخلفية اليسرى." }
+      },
+      {
+        "type": "fixedValue", "value": 3,
+        "phrases": { "en": ["stop the rear left window"], "ar": ["أوقف النافذة الخلفية اليسرى", "وقف النافذة الخلفية اليسرى"] },
+        "confirmation": { "en": "Stopping the rear left window.", "ar": "تم إيقاف النافذة الخلفية اليسرى." }
+      }
+    ]
+  },
+  {
+    "id": "window.rearRight",
+    "domain": "BODYWORK",
+    "displayName": "Rear-right window",
+    "deviceType": 1001,
+    "featureId": 1125122115,
+    "invocation": { "type": "genericFeatureSet" },
+    "parameter": { "type": "fixedEnum", "options": { "open": 1, "close": 2, "stop": 3, "half": 4, "breath": 5 } },
+    "intents": [
+      {
+        "type": "fixedValue", "value": 1,
+        "phrases": { "en": ["open the rear right window", "roll down the rear right window", "open the back right window"], "ar": ["افتح النافذة الخلفية اليمنى"] },
+        "confirmation": { "en": "Opening the rear right window.", "ar": "جارِ فتح النافذة الخلفية اليمنى." }
+      },
+      {
+        "type": "fixedValue", "value": 2,
+        "phrases": { "en": ["close the rear right window", "roll up the rear right window", "close the back right window"], "ar": ["اغلق النافذة الخلفية اليمنى", "أغلق النافذة الخلفية اليمنى"] },
+        "confirmation": { "en": "Closing the rear right window.", "ar": "جارِ إغلاق النافذة الخلفية اليمنى." }
+      },
+      {
+        "type": "fixedValue", "value": 3,
+        "phrases": { "en": ["stop the rear right window"], "ar": ["أوقف النافذة الخلفية اليمنى", "وقف النافذة الخلفية اليمنى"] },
+        "confirmation": { "en": "Stopping the rear right window.", "ar": "تم إيقاف النافذة الخلفية اليمنى." }
+      }
+    ]
+  },
+  {
+    "id": "sunroof",
+    "domain": "BODYWORK",
+    "displayName": "Sunroof",
+    "deviceType": 1001,
+    "featureId": 1125122056,
+    "invocation": { "type": "genericFeatureSet" },
+    "parameter": { "type": "fixedEnum", "options": { "close": 0, "open": 252, "breath": 253 } },
+    "intents": [
+      {
+        "type": "fixedValue", "value": 252,
+        "phrases": { "en": ["open the sunroof", "open sunroof"], "ar": ["افتح فتحة السقف", "افتح السقف"] },
+        "confirmation": { "en": "Opening the sunroof.", "ar": "جارِ فتح فتحة السقف." }
+      },
+      {
+        "type": "fixedValue", "value": 0,
+        "phrases": { "en": ["close the sunroof", "close sunroof"], "ar": ["اغلق فتحة السقف", "اغلق السقف", "أغلق السقف"] },
+        "confirmation": { "en": "Closing the sunroof.", "ar": "جارِ إغلاق فتحة السقف." }
+      }
+    ]
+  },
+  {
+    "id": "sunroof.openPercent",
+    "domain": "BODYWORK",
+    "displayName": "Sunroof open percent",
+    "deviceType": 1001,
+    "featureId": 1330642976,
+    "invocation": { "type": "genericFeatureSet" },
+    "parameter": { "type": "range", "min": 0, "max": 100, "unit": "%" },
+    "intents": []
+  },
+  {
+    "id": "sunshade.percent",
+    "domain": "BODYWORK",
+    "displayName": "Sunshade",
+    "deviceType": 1001,
+    "featureId": 1330642984,
+    "invocation": { "type": "genericFeatureSet" },
+    "parameter": { "type": "range", "min": 0, "max": 100, "unit": "%" },
+    "intents": []
+  },
+  {
+    "id": "audio.volume",
+    "domain": "AUDIO",
+    "displayName": "Volume",
+    "deviceType": 1002,
+    "featureId": 1309020176,
+    "invocation": { "type": "genericFeatureSet" },
+    "parameter": { "type": "range", "min": 0, "max": 30 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set the volume to", "set volume to", "change the volume to"],
+          "ar": ["اضبط الصوت على", "اضبط مستوى الصوت على", "غير الصوت الى"]
+        },
+        "confirmation": { "en": "Setting the volume to %d.", "ar": "تم ضبط مستوى الصوت على %d." }
+      }
+    ]
+  },
+  {
+    "id": "trunk",
+    "domain": "SETTING",
+    "displayName": "Trunk",
+    "deviceType": 1023,
+    "featureId": 1125122080,
+    "invocation": { "type": "genericFeatureSet" },
+    "parameter": { "type": "fixedEnum", "options": { "open": 1, "stop": 2, "close": 3 } },
+    "intents": [
+      {
+        "type": "fixedValue", "value": 1,
+        "phrases": { "en": ["open the trunk", "open trunk", "pop the trunk"], "ar": ["افتح الصندوق", "افتح صندوق السيارة"] },
+        "confirmation": { "en": "Opening the trunk.", "ar": "جارِ فتح الصندوق." }
+      },
+      {
+        "type": "fixedValue", "value": 3,
+        "phrases": { "en": ["close the trunk", "close trunk"], "ar": ["اغلق الصندوق", "أغلق صندوق السيارة"] },
+        "confirmation": { "en": "Closing the trunk.", "ar": "جارِ إغلاق الصندوق." }
+      }
+    ]
+  },
+  {
+    "id": "screen.rotation",
+    "domain": "SETTING",
+    "displayName": "Screen rotation",
+    "invocation": {
+      "type": "namedMethod",
+      "deviceClass": "setting",
+      "methodName": "setPadRotation",
+      "paramTypes": ["int"],
+      "argsTemplate": [null]
+    },
+    "parameter": { "type": "fixedEnum", "options": { "horizontal": 1, "vertical": 2 } },
+    "intents": []
+  },
+  {
+    "id": "light.ambientBrightness",
+    "domain": "SETTING",
+    "displayName": "Ambient light brightness",
+    "invocation": {
+      "type": "namedMethod",
+      "deviceClass": "setting",
+      "methodName": "setIALBrightness",
+      "paramTypes": ["int", "int", "int"],
+      "argsTemplate": [1, null, 1]
+    },
+    "parameter": { "type": "range", "min": 1, "max": 3 },
+    "intents": []
+  },
+  {
+    "id": "seat.heating.driver",
+    "domain": "CLIMATE",
+    "displayName": "Driver seat heating",
+    "featureId": 1276252180,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_SEAT_VENTILATION_HEATING_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcSeatVentilationHeating"
+    },
+    "parameter": { "type": "range", "min": 0, "max": 3 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set driver seat heating to", "turn on driver seat heating level", "driver seat heat level"],
+          "ar": ["اضبط تدفئة مقعد السائق على", "درجة تدفئة مقعد السائق"]
+        },
+        "confirmation": { "en": "Setting driver seat heating to level %d.", "ar": "تم ضبط تدفئة مقعد السائق على المستوى %d." }
+      }
+    ]
+  },
+  {
+    "id": "seat.heating.passenger",
+    "domain": "CLIMATE",
+    "displayName": "Passenger seat heating",
+    "featureId": 1276252188,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_SEAT_VENTILATION_HEATING_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcSeatVentilationHeating"
+    },
+    "parameter": { "type": "range", "min": 0, "max": 3 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set passenger seat heating to", "turn on passenger seat heating level", "passenger seat heat level"],
+          "ar": ["اضبط تدفئة مقعد الراكب على", "درجة تدفئة مقعد الراكب"]
+        },
+        "confirmation": { "en": "Setting passenger seat heating to level %d.", "ar": "تم ضبط تدفئة مقعد الراكب على المستوى %d." }
+      }
+    ]
+  },
+  {
+    "id": "seat.heating.rearLeft",
+    "domain": "CLIMATE",
+    "displayName": "Rear-left seat heating",
+    "featureId": 1276252196,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_SEAT_VENTILATION_HEATING_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcSeatVentilationHeating"
+    },
+    "parameter": { "type": "range", "min": 0, "max": 3 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set rear left seat heating to", "rear left seat heat level"],
+          "ar": ["اضبط تدفئة المقعد الخلفي الأيسر على"]
+        },
+        "confirmation": { "en": "Setting rear left seat heating to level %d.", "ar": "تم ضبط تدفئة المقعد الخلفي الأيسر على المستوى %d." }
+      }
+    ]
+  },
+  {
+    "id": "seat.heating.rearRight",
+    "domain": "CLIMATE",
+    "displayName": "Rear-right seat heating",
+    "featureId": 1276252204,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_SEAT_VENTILATION_HEATING_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcSeatVentilationHeating"
+    },
+    "parameter": { "type": "range", "min": 0, "max": 3 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set rear right seat heating to", "rear right seat heat level"],
+          "ar": ["اضبط تدفئة المقعد الخلفي الأيمن على"]
+        },
+        "confirmation": { "en": "Setting rear right seat heating to level %d.", "ar": "تم ضبط تدفئة المقعد الخلفي الأيمن على المستوى %d." }
+      }
+    ]
+  },
+  {
+    "id": "seat.ventilation.driver",
+    "domain": "CLIMATE",
+    "displayName": "Driver seat ventilation",
+    "featureId": 1276252176,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_SEAT_VENTILATION_HEATING_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcSeatVentilationHeating"
+    },
+    "parameter": { "type": "range", "min": 0, "max": 3 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set driver seat ventilation to", "driver seat cooling level", "driver seat vent level"],
+          "ar": ["اضبط تهوية مقعد السائق على"]
+        },
+        "confirmation": { "en": "Setting driver seat ventilation to level %d.", "ar": "تم ضبط تهوية مقعد السائق على المستوى %d." }
+      }
+    ]
+  },
+  {
+    "id": "seat.ventilation.passenger",
+    "domain": "CLIMATE",
+    "displayName": "Passenger seat ventilation",
+    "featureId": 1276252184,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_SEAT_VENTILATION_HEATING_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcSeatVentilationHeating"
+    },
+    "parameter": { "type": "range", "min": 0, "max": 3 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set passenger seat ventilation to", "passenger seat cooling level", "passenger seat vent level"],
+          "ar": ["اضبط تهوية مقعد الراكب على"]
+        },
+        "confirmation": { "en": "Setting passenger seat ventilation to level %d.", "ar": "تم ضبط تهوية مقعد الراكب على المستوى %d." }
+      }
+    ]
+  },
+  {
+    "id": "seat.ventilation.rearLeft",
+    "domain": "CLIMATE",
+    "displayName": "Rear-left seat ventilation",
+    "featureId": 1276252192,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_SEAT_VENTILATION_HEATING_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcSeatVentilationHeating"
+    },
+    "parameter": { "type": "range", "min": 0, "max": 3 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set rear left seat ventilation to", "rear left seat cooling level"],
+          "ar": ["اضبط تهوية المقعد الخلفي الأيسر على"]
+        },
+        "confirmation": { "en": "Setting rear left seat ventilation to level %d.", "ar": "تم ضبط تهوية المقعد الخلفي الأيسر على المستوى %d." }
+      }
+    ]
+  },
+  {
+    "id": "seat.ventilation.rearRight",
+    "domain": "CLIMATE",
+    "displayName": "Rear-right seat ventilation",
+    "featureId": 1276252200,
+    "invocation": {
+      "type": "acBinderProperty",
+      "subServiceKey": "AC_SEAT_VENTILATION_HEATING_SERVICE",
+      "interfaceDescriptor": "com.byd.ac.IAcSeatVentilationHeating"
+    },
+    "parameter": { "type": "range", "min": 0, "max": 3 },
+    "intents": [
+      {
+        "type": "numericSlot",
+        "phrases": {
+          "en": ["set rear right seat ventilation to", "rear right seat cooling level"],
+          "ar": ["اضبط تهوية المقعد الخلفي الأيمن على"]
+        },
+        "confirmation": { "en": "Setting rear right seat ventilation to level %d.", "ar": "تم ضبط تهوية المقعد الخلفي الأيمن على المستوى %d." }
+      }
+    ]
+  }
+]

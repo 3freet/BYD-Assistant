@@ -2,11 +2,11 @@ package com.kangrio.byd.assistant.vehicle
 
 /**
  * A single known vehicle control. [deviceType]/[featureId] follow the BYD HAL's "generic feature
- * route" (`AbsBYDAutoDevice.set(deviceType, int[]{featureId}, int[]{value})`) and are only
- * meaningful when [invocation] is [VehicleInvocation.GenericFeatureSet] — named-method commands
- * don't have a hex feature code, so both are null there. [invocation] records which real HAL call
- * shape would actually be used once Phase 2 (see [ReflectionVehicleController]) is built, so this
- * data model doesn't need to change once that's implemented.
+ * route" (`AbsBYDAutoDevice.set(deviceType, int[]{featureId}, int[]{value})`) and are used when
+ * [invocation] is [VehicleInvocation.GenericFeatureSet]. [featureId] is also reused as the
+ * property `id` argument when [invocation] is [VehicleInvocation.AcBinderProperty] — the same
+ * BYD signal-numbering scheme shows up in both invocation surfaces. [NamedMethod][VehicleInvocation.NamedMethod]
+ * commands don't have a hex feature code, so both are null there.
  */
 data class VehicleCommand(
     val id: String,
@@ -53,4 +53,19 @@ sealed interface VehicleInvocation {
             }
         }
     }
+
+    /**
+     * The confirmed real mechanism for AC/climate controls, reverse-engineered from a real
+     * shipped BYD DiLink app (i99dash): resolve `com.byd.ac.<interfaceDescriptor>` as a named
+     * sub-binder of the `"byd_airconditioning"` system service (via a `getSub(subServiceKey)`
+     * Binder call on the master service), then issue a generic `(id, area, value)` property-set
+     * transaction on that sub-binder — `id` is the owning [VehicleCommand.featureId], not a
+     * separate transaction code per control. See [ReflectionVehicleController] for the transact
+     * codes and Parcel shape.
+     */
+    data class AcBinderProperty(
+        val subServiceKey: String,
+        val interfaceDescriptor: String,
+        val area: Int = 0,
+    ) : VehicleInvocation
 }
