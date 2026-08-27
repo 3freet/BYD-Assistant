@@ -1,0 +1,25 @@
+package com.kangrio.byd.assistant.vehicle
+
+interface VehicleController {
+    /** Implementations MUST call [VehicleSafety.assertDispatchAllowed] as their first statement. */
+    suspend fun dispatch(command: VehicleCommand, value: Int): VehicleDispatchResult
+}
+
+sealed interface VehicleDispatchResult {
+    /** The HAL call was accepted without throwing — this does NOT mean the car actually moved.
+     * No read-back/getter is documented anywhere in the source research to confirm real actuation. */
+    data class Success(val note: String? = null) : VehicleDispatchResult
+
+    data class Blocked(val reason: String) : VehicleDispatchResult
+
+    data class Failure(val error: VehicleDispatchError, val detail: String? = null) : VehicleDispatchResult
+}
+
+enum class VehicleDispatchError {
+    CLASS_NOT_FOUND,
+    METHOD_NOT_FOUND,
+    SECURITY_DENIED,
+    INVOCATION_FAILED,
+    INVALID_ARGUMENT,
+    UNKNOWN,
+}

@@ -27,6 +27,7 @@ import com.kangrio.byd.assistant.Constant
 import com.kangrio.byd.assistant.R
 import com.kangrio.byd.assistant.StartActivity
 import com.kangrio.byd.assistant.data.AssistantApp
+import com.kangrio.byd.assistant.service.VoiceWakeService
 
 object Utils {
     private val soundPool = SoundPool.Builder()
@@ -119,11 +120,18 @@ object Utils {
      * Check if all required permissions are granted.
      */
     fun setupCompleted(context: Context): Boolean {
-        val isGrantedWriteSecureSettings = !isDilink() || isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
-        val isEnableVoiceAssistant = isEnabledVoiceAssistant(context)
-        val isAssistantAppsInstalled = listAssistantPackages(context).isNotEmpty()
         val isAutoStart = isGrantedAutoStart(context)
-        return isGrantedWriteSecureSettings && isEnableVoiceAssistant && isAssistantAppsInstalled && isAutoStart
+        return when (Preferences.operationMode) {
+            OperationMode.STANDALONE_AI ->
+                isGranted(context, Manifest.permission.RECORD_AUDIO) && SecureCredentials.hasAnyKeyConfigured() && isAutoStart
+
+            OperationMode.EXTERNAL_APP, OperationMode.UNSET -> {
+                val isGrantedWriteSecureSettings = !isDilink() || isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)
+                val isEnableVoiceAssistant = isEnabledVoiceAssistant(context)
+                val isAssistantAppsInstalled = listAssistantPackages(context).isNotEmpty()
+                isGrantedWriteSecureSettings && isEnableVoiceAssistant && isAssistantAppsInstalled && isAutoStart
+            }
+        }
     }
 
     /**
@@ -154,6 +162,13 @@ object Utils {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
                 )
+                return
+            }
+
+            if (Preferences.operationMode == OperationMode.STANDALONE_AI) {
+                context.startService(Intent(context, VoiceWakeService::class.java).apply {
+                    action = VoiceWakeService.START_STANDALONE_SESSION
+                })
                 return
             }
 

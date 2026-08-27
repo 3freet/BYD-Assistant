@@ -104,6 +104,8 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.retrofit)
     implementation(libs.retrofit.converter.gson)
+    implementation(libs.gson)
+    implementation(libs.androidx.security.crypto)
     implementation(libs.accompanist.drawablepainter)
     implementation(project(":androidwakeword"))
 

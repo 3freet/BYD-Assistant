@@ -37,6 +37,7 @@ import androidx.compose.material.icons.filled.BatteryChargingFull
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Layers
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
@@ -44,6 +45,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SmartToy
+import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -58,6 +60,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
@@ -80,14 +83,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.kangrio.byd.assistant.llm.LlmProviders
 import com.kangrio.byd.assistant.service.VoiceWakeService
 import com.kangrio.byd.assistant.ui.composable.AppIcon
+import com.kangrio.byd.assistant.util.OperationMode
 import com.kangrio.byd.assistant.util.Preferences
+import com.kangrio.byd.assistant.util.SecureCredentials
 import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -112,6 +119,9 @@ enum class OnboardingTab {
     WIZARD,
     CHECKLIST
 }
+
+/** Items whose action stays clickable after being granted, so the user can change their choice. */
+private val RECONFIGURABLE_ITEM_IDS = setOf("assistant_app", "operation_mode", "standalone_provider")
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -145,6 +155,12 @@ fun PermissionOnboardingScreen(
     }
     var assistantApps by remember { mutableStateOf(Utils.listAssistantPackages(context)) }
     var selectedAssistant by remember { mutableStateOf(Utils.getCurrentAssistantApp(context)) }
+
+    var operationMode by remember { mutableStateOf(Preferences.operationMode) }
+    var showModeDialog by remember { mutableStateOf(false) }
+    var showProviderDialog by remember { mutableStateOf(false) }
+    var apiKeyInput by remember { mutableStateOf(SecureCredentials.getApiKey(Preferences.llmProviderId) ?: "") }
+    var isApiKeyConfigured by remember { mutableStateOf(SecureCredentials.hasAnyKeyConfigured()) }
 
     // Launchers for permissions
     val micPermissionLauncher = rememberLauncherForActivityResult(
@@ -190,7 +206,9 @@ fun PermissionOnboardingScreen(
         isWriteSecureSettingsGranted,
         isNotificationGranted,
         isAssistantConfigured,
-        selectedAssistant
+        selectedAssistant,
+        operationMode,
+        isApiKeyConfigured
     ) {
         val list = mutableListOf(
             OnboardingPermissionItem(
@@ -269,28 +287,64 @@ fun PermissionOnboardingScreen(
                 }
             ),
             OnboardingPermissionItem(
-                id = "assistant_app",
-                title = "Target AI Assistant App",
-                category = "Voice Engine Selection",
-                description = "Select which AI voice application to trigger when Assistant is invoked.",
-                detailedReason = "Choose between Google, ChatGPT, Perplexity, Claude or other installed voice engines.",
-                icon = Icons.Default.SmartToy,
-                isGranted = isAssistantConfigured,
+                id = "operation_mode",
+                title = "Assistant Mode",
+                category = "Voice Interaction Mode",
+                description = "Choose how Assistant responds when invoked.",
+                detailedReason = "Launch an external voice assistant app (Google, ChatGPT, etc.), or let Assistant handle your questions itself using an AI API you configure.",
+                icon = Icons.Default.SwapHoriz,
+                isGranted = operationMode != OperationMode.UNSET,
                 isRequired = true,
-                actionText = if (selectedAssistant.name.isNotEmpty()) "Selected: ${selectedAssistant.name}" else "Select Assistant App",
-                onAction = {
-                    if (assistantApps.isNotEmpty()) {
-                        if (!isWriteSecureSettingsGranted && Utils.isDilink()) {
-                            Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
-                            return@OnboardingPermissionItem
-                        }
-                        showAssistantDialog = true
-                    } else {
-                        Utils.openStore(context)
-                    }
-                }
+                actionText = when (operationMode) {
+                    OperationMode.EXTERNAL_APP -> "Mode: External App"
+                    OperationMode.STANDALONE_AI -> "Mode: Standalone AI"
+                    OperationMode.UNSET -> "Choose Assistant Mode"
+                },
+                onAction = { showModeDialog = true }
             )
         )
+
+        if (operationMode == OperationMode.STANDALONE_AI) {
+            list.add(
+                OnboardingPermissionItem(
+                    id = "standalone_provider",
+                    title = "AI Provider & API Key",
+                    category = "Standalone AI Configuration",
+                    description = "Enter your own API key so Assistant can answer directly.",
+                    detailedReason = "Assistant sends your question straight to ${LlmProviders.byId(Preferences.llmProviderId)?.displayName ?: "your chosen AI provider"} using this key — no external app is launched.",
+                    icon = Icons.Default.Key,
+                    isGranted = isApiKeyConfigured,
+                    isRequired = true,
+                    actionText = if (isApiKeyConfigured) "API Key Configured" else "Enter API Key",
+                    onAction = { showProviderDialog = true }
+                )
+            )
+        } else {
+            list.add(
+                OnboardingPermissionItem(
+                    id = "assistant_app",
+                    title = "Target AI Assistant App",
+                    category = "Voice Engine Selection",
+                    description = "Select which AI voice application to trigger when Assistant is invoked.",
+                    detailedReason = "Choose between Google, ChatGPT, Perplexity, Claude or other installed voice engines.",
+                    icon = Icons.Default.SmartToy,
+                    isGranted = isAssistantConfigured,
+                    isRequired = true,
+                    actionText = if (selectedAssistant.name.isNotEmpty()) "Selected: ${selectedAssistant.name}" else "Select Assistant App",
+                    onAction = {
+                        if (assistantApps.isNotEmpty()) {
+                            if (!isWriteSecureSettingsGranted && Utils.isDilink()) {
+                                Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
+                                return@OnboardingPermissionItem
+                            }
+                            showAssistantDialog = true
+                        } else {
+                            Utils.openStore(context)
+                        }
+                    }
+                )
+            )
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             list.add(
@@ -490,6 +544,98 @@ fun PermissionOnboardingScreen(
             confirmButton = {}
         )
     }
+
+    // Assistant Mode Select Dialog
+    if (showModeDialog) {
+        AlertDialog(
+            onDismissRequest = { showModeDialog = false },
+            title = { Text("Choose Assistant Mode") },
+            text = {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                Preferences.operationMode = OperationMode.EXTERNAL_APP
+                                operationMode = OperationMode.EXTERNAL_APP
+                                showModeDialog = false
+                            }
+                            .padding(vertical = 12.dp)
+                    ) {
+                        Column {
+                            Text("Launch External Assistant App", fontWeight = FontWeight.Medium)
+                            Text(
+                                "Use Google Assistant, ChatGPT, or another installed app.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                Preferences.operationMode = OperationMode.STANDALONE_AI
+                                operationMode = OperationMode.STANDALONE_AI
+                                showModeDialog = false
+                            }
+                            .padding(vertical = 12.dp)
+                    ) {
+                        Column {
+                            Text("Standalone AI", fontWeight = FontWeight.Medium)
+                            Text(
+                                "Assistant answers you directly using your own AI API key.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    // AI Provider API Key Dialog
+    if (showProviderDialog) {
+        val provider = LlmProviders.byId(Preferences.llmProviderId) ?: LlmProviders.all.first()
+        AlertDialog(
+            onDismissRequest = { showProviderDialog = false },
+            title = { Text("${provider.displayName} API Key") },
+            text = {
+                Column {
+                    Text(
+                        "Enter your own API key — Assistant uses it to talk directly to ${provider.displayName}.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = apiKeyInput,
+                        onValueChange = { apiKeyInput = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        visualTransformation = PasswordVisualTransformation()
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        SecureCredentials.setApiKey(provider.id, apiKeyInput.trim())
+                        isApiKeyConfigured = SecureCredentials.hasAnyKeyConfigured()
+                        showProviderDialog = false
+                    },
+                    enabled = apiKeyInput.isNotBlank()
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showProviderDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -648,7 +794,7 @@ fun WizardView(
             // Action Button
             Button(
                 onClick = item.onAction,
-                enabled = !item.isGranted || item.id == "assistant_app",
+                enabled = !item.isGranted || item.id in RECONFIGURABLE_ITEM_IDS,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = if (item.isGranted) Color(0xFF4CAF50) else MaterialTheme.colorScheme.primary
                 ),
@@ -869,7 +1015,7 @@ fun PermissionCard(item: OnboardingPermissionItem) {
 
             FilledTonalButton(
                 onClick = item.onAction,
-                enabled = !item.isGranted || item.id == "assistant_app",
+                enabled = !item.isGranted || item.id in RECONFIGURABLE_ITEM_IDS,
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {

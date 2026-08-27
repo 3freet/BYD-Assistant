@@ -32,6 +32,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -50,13 +51,18 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import com.kangrio.byd.assistant.data.OnlineWakeWordModel
 import com.kangrio.byd.assistant.data.ReleaseInfo
+import com.kangrio.byd.assistant.llm.LlmProviders
 import com.kangrio.byd.assistant.ota.OtaUpdater
 import com.kangrio.byd.assistant.service.VoiceWakeService
 import com.kangrio.byd.assistant.ui.composable.AppIcon
 import com.kangrio.byd.assistant.ui.theme.AssistantTheme
+import com.kangrio.byd.assistant.util.AssistantLanguage
+import com.kangrio.byd.assistant.util.OperationMode
 import com.kangrio.byd.assistant.util.Preferences
+import com.kangrio.byd.assistant.util.SecureCredentials
 import com.kangrio.byd.assistant.util.Utils
 import com.kangrio.byd.assistant.util.WakeWordModelManager
+import com.suxsem.androidwakeword.EmbeddingExtractor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,13 +77,16 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
 
 private var isImportingModel = false
@@ -206,6 +215,18 @@ fun SettingsScreen(
     }
     var selectedAssistantApp by remember { mutableStateOf(Utils.getCurrentAssistantApp(context)) }
 
+    var operationMode by remember { mutableStateOf(Preferences.operationMode) }
+    var showModeDialog by remember { mutableStateOf(false) }
+    var showApiKeyDialog by remember { mutableStateOf(false) }
+    var apiKeyInput by remember { mutableStateOf("") }
+    var isApiKeyConfigured by remember { mutableStateOf(SecureCredentials.hasAnyKeyConfigured()) }
+    var expandedLlmModel by remember { mutableStateOf(false) }
+    var selectedLlmModel by remember {
+        mutableStateOf(Preferences.llmModel.ifEmpty { LlmProviders.byId(Preferences.llmProviderId)?.defaultModel ?: "" })
+    }
+    var expandedLanguage by remember { mutableStateOf(false) }
+    var selectedLanguage by remember { mutableStateOf(Preferences.assistantLanguage) }
+
     var isWriteSecureSettingsGranted by remember { mutableStateOf(Utils.isGranted(context, Manifest.permission.WRITE_SECURE_SETTINGS)) }
 
     var expandedModels by remember { mutableStateOf(false) }
@@ -220,6 +241,98 @@ fun SettingsScreen(
     var onlineModelsError by remember { mutableStateOf<String?>(null) }
     var downloadingModelNames by remember { mutableStateOf<Set<String>>(emptySet()) }
     var modelSearchQuery by remember { mutableStateOf("") }
+
+    var showRecordWakeWordDialog by remember { mutableStateOf(false) }
+    var customWakeWordName by remember { mutableStateOf("") }
+    var recordedTakes by remember { mutableStateOf<List<FloatArray?>>(listOf(null, null, null)) }
+    var recordingTakeIndex by remember { mutableStateOf<Int?>(null) }
+    var isSavingTemplate by remember { mutableStateOf(false) }
+    var recordWakeWordError by remember { mutableStateOf<String?>(null) }
+    var wasHotwordRunningBeforeRecording by remember { mutableStateOf(false) }
+
+    val requestMicPermissionForRecording = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            showRecordWakeWordDialog = true
+        } else {
+            Toast.makeText(context, "Microphone permission is required to record a wake word", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    fun recordTake(index: Int) {
+        if (recordingTakeIndex != null || isSavingTemplate) return
+        recordingTakeIndex = index
+        recordWakeWordError = null
+        scope.launch {
+            try {
+                val embedding = withContext(Dispatchers.IO) {
+                    val extractor = EmbeddingExtractor(context)
+                    try {
+                        extractor.recordAndEmbed(Preferences.micAudioSource)
+                    } finally {
+                        extractor.release()
+                    }
+                }
+                recordedTakes = recordedTakes.toMutableList().apply { set(index, embedding) }
+            } catch (e: Throwable) {
+                recordWakeWordError = e.message ?: "Failed to record take ${index + 1}"
+            } finally {
+                recordingTakeIndex = null
+            }
+        }
+    }
+
+    fun saveCustomWakeWord() {
+        val takes = recordedTakes.filterNotNull()
+        if (takes.size < recordedTakes.size) return
+
+        isSavingTemplate = true
+        recordWakeWordError = null
+
+        val pooled = FloatArray(takes.first().size)
+        for (take in takes) {
+            for (i in take.indices) pooled[i] += take[i]
+        }
+        for (i in pooled.indices) pooled[i] /= takes.size
+
+        val result = WakeWordModelManager.saveCustomTemplate(context, customWakeWordName, pooled)
+        isSavingTemplate = false
+        result.onSuccess { savedName ->
+            installedModels = WakeWordModelManager.getInstalledModels(context)
+            selectedModel = savedName
+            onModelChanged(savedName)
+            Toast.makeText(context, "Saved \"$savedName\"", Toast.LENGTH_SHORT).show()
+            showRecordWakeWordDialog = false
+        }.onFailure { err ->
+            recordWakeWordError = err.message ?: "Failed to save wake word"
+        }
+    }
+
+    // Pause/resume continuous detection around the recording dialog so it doesn't
+    // compete with enrollment for the microphone; runs once per open/close transition.
+    LaunchedEffect(showRecordWakeWordDialog) {
+        if (showRecordWakeWordDialog) {
+            wasHotwordRunningBeforeRecording = VoiceWakeService.isWakeWordStarted
+            if (wasHotwordRunningBeforeRecording) {
+                context.startService(Intent(context, VoiceWakeService::class.java).apply {
+                    action = VoiceWakeService.STOP_HOTWORD_DETECTION
+                })
+            }
+        } else {
+            if (wasHotwordRunningBeforeRecording) {
+                context.startService(Intent(context, VoiceWakeService::class.java).apply {
+                    action = VoiceWakeService.START_HOTWORD_DETECTION
+                })
+                wasHotwordRunningBeforeRecording = false
+            }
+            customWakeWordName = ""
+            recordedTakes = listOf(null, null, null)
+            recordingTakeIndex = null
+            isSavingTemplate = false
+            recordWakeWordError = null
+        }
+    }
 
     val importModelLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -263,6 +376,15 @@ fun SettingsScreen(
         }
     }
 
+    // Cosine-similarity template matching scores differently than the trained classifiers,
+    // so switching between a built-in/imported model and a recorded one needs its own label table.
+    LaunchedEffect(selectedModel) {
+        val options = if (WakeWordModelManager.isCustomTemplate(context, selectedModel))
+            TEMPLATE_SENSITIVITY_OPTIONS else SENSITIVITY_OPTIONS
+        selectedSensitivityLevel = options.firstOrNull { it.second == Preferences.hotwordSensitivity }?.first
+            ?: "Balanced"
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -297,36 +419,129 @@ fun SettingsScreen(
                 }
 
                 SettingRow(
-                    label = "Assistant app",
-                    description = "Select the assistant app to use."
+                    label = "Assistant Mode",
+                    description = "Launch another app, or answer questions directly."
                 ) {
-                        FilledTonalButton(
-                            onClick = {
-                                if (!isWriteSecureSettingsGranted) {
-                                    Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
-                                    return@FilledTonalButton
-                                }
-                                showAssistantDialog = true
+                    FilledTonalButton(onClick = { showModeDialog = true }) {
+                        Text(
+                            when (operationMode) {
+                                OperationMode.STANDALONE_AI -> "Standalone AI"
+                                OperationMode.EXTERNAL_APP, OperationMode.UNSET -> "External App"
                             }
-                        ) {
-                            Text(selectedAssistantApp.name)
-                        }
+                        )
+                    }
                 }
-                if (Utils.getNotificationListenerComponentName(context, selectedAssistantApp.packageName) != null) {
+
+                if (operationMode != OperationMode.STANDALONE_AI) {
                     SettingRow(
-                        label = "Assistant Permissions",
-                        description = "Give the assistant app required permissions."
+                        label = "Assistant app",
+                        description = "Select the assistant app to use."
+                    ) {
+                            FilledTonalButton(
+                                onClick = {
+                                    if (!isWriteSecureSettingsGranted) {
+                                        Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
+                                        return@FilledTonalButton
+                                    }
+                                    showAssistantDialog = true
+                                }
+                            ) {
+                                Text(selectedAssistantApp.name)
+                            }
+                    }
+                    if (Utils.getNotificationListenerComponentName(context, selectedAssistantApp.packageName) != null) {
+                        SettingRow(
+                            label = "Assistant Permissions",
+                            description = "Give the assistant app required permissions."
+                        ) {
+                            FilledTonalButton(
+                                onClick = {
+                                    if (!isWriteSecureSettingsGranted) {
+                                        Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
+                                        return@FilledTonalButton
+                                    }
+                                    showAssistantPermissionsDialog = true
+                                }
+                            ) {
+                                Text("Grant")
+                            }
+                        }
+                    }
+                } else {
+                    val provider = LlmProviders.byId(Preferences.llmProviderId) ?: LlmProviders.all.first()
+
+                    SettingRow(
+                        label = "AI Provider",
+                        description = "Which AI answers your questions."
+                    ) {
+                        Text(provider.displayName, style = MaterialTheme.typography.bodyLarge)
+                    }
+
+                    SettingRow(
+                        label = "API Key",
+                        description = "Your own ${provider.displayName} API key."
                     ) {
                         FilledTonalButton(
                             onClick = {
-                                if (!isWriteSecureSettingsGranted) {
-                                    Toast.makeText(context, "Write Secure Settings permission is required", Toast.LENGTH_SHORT).show()
-                                    return@FilledTonalButton
-                                }
-                                showAssistantPermissionsDialog = true
+                                apiKeyInput = SecureCredentials.getApiKey(provider.id) ?: ""
+                                showApiKeyDialog = true
                             }
                         ) {
-                            Text("Grant")
+                            Text(if (isApiKeyConfigured) "Update Key" else "Enter Key")
+                        }
+                    }
+
+                    SettingRow(
+                        label = "AI Model",
+                        description = "Balance answer quality against speed/cost."
+                    ) {
+                        Box {
+                            FilledTonalButton(onClick = { expandedLlmModel = !expandedLlmModel }) {
+                                Text(selectedLlmModel)
+                            }
+                            DropdownMenu(
+                                expanded = expandedLlmModel,
+                                onDismissRequest = { expandedLlmModel = false },
+                                offset = DpOffset(x = 0.dp, y = 56.dp)
+                            ) {
+                                provider.availableModels.forEach { modelName ->
+                                    DropdownMenuItem(
+                                        text = { Text(modelName) },
+                                        onClick = {
+                                            Preferences.llmModel = modelName
+                                            selectedLlmModel = modelName
+                                            expandedLlmModel = false
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    SettingRow(
+                        label = "Assistant Language",
+                        description = "Language for speech recognition and replies."
+                    ) {
+                        Box {
+                            FilledTonalButton(onClick = { expandedLanguage = !expandedLanguage }) {
+                                Text(languageLabel(selectedLanguage))
+                            }
+                            DropdownMenu(
+                                expanded = expandedLanguage,
+                                onDismissRequest = { expandedLanguage = false },
+                                offset = DpOffset(x = 0.dp, y = 56.dp)
+                            ) {
+                                AssistantLanguage.entries.forEach { language ->
+                                    DropdownMenuItem(
+                                        text = { Text(languageLabel(language)) },
+                                        onClick = {
+                                            Preferences.assistantLanguage = language
+                                            selectedLanguage = language
+                                            expandedLanguage = false
+                                        }
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -482,6 +697,24 @@ fun SettingsScreen(
 
                 SettingRow(
                     enabled = isStateOn,
+                    label = "Record Custom Wake Word",
+                    description = "Say your own phrase — matched fully offline."
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            if (Utils.isGranted(context, Manifest.permission.RECORD_AUDIO)) {
+                                showRecordWakeWordDialog = true
+                            } else {
+                                requestMicPermissionForRecording.launch(Manifest.permission.RECORD_AUDIO)
+                            }
+                        }
+                    ) {
+                        Text("Record")
+                    }
+                }
+
+                SettingRow(
+                    enabled = isStateOn,
                     label = "Download Wake Words",
                     description = "Download models from Home Assistant collection."
                 ) {
@@ -532,7 +765,9 @@ fun SettingsScreen(
                                     .heightIn(max = 300.dp)
                                     .verticalScroll(rememberScrollState())
                             ) {
-                                SENSITIVITY_OPTIONS.forEach { (level, sensitivity) ->
+                                val sensitivityOptions = if (WakeWordModelManager.isCustomTemplate(context, selectedModel))
+                                    TEMPLATE_SENSITIVITY_OPTIONS else SENSITIVITY_OPTIONS
+                                sensitivityOptions.forEach { (level, sensitivity) ->
                                     DropdownMenuItem(
                                         text = { Text(level) },
                                         onClick = {
@@ -947,6 +1182,200 @@ fun SettingsScreen(
             }
         )
     }
+
+    if (showRecordWakeWordDialog) {
+        val isNameValid = customWakeWordName.isNotBlank()
+        val allTakesRecorded = recordedTakes.all { it != null }
+        val isBusy = recordingTakeIndex != null || isSavingTemplate
+
+        AlertDialog(
+            onDismissRequest = { if (!isBusy) showRecordWakeWordDialog = false },
+            title = {
+                Column {
+                    Text("Record Wake Word")
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Say your phrase 3 times, fully offline.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    OutlinedTextField(
+                        value = customWakeWordName,
+                        onValueChange = {
+                            customWakeWordName = it
+                            recordWakeWordError = null
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        placeholder = { Text("Name (e.g. \"Hey Buddy\")") },
+                        singleLine = true,
+                        enabled = !isBusy
+                    )
+
+                    recordedTakes.forEachIndexed { index, take ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 6.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Take ${index + 1}", style = MaterialTheme.typography.bodyMedium)
+
+                            when {
+                                recordingTakeIndex == index -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                        Spacer(Modifier.width(8.dp))
+                                        Text("Listening…", style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                                take != null -> {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = "Recorded",
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                        OutlinedButton(
+                                            onClick = { recordTake(index) },
+                                            enabled = !isBusy
+                                        ) {
+                                            Text("Re-record")
+                                        }
+                                    }
+                                }
+                                else -> {
+                                    Button(
+                                        onClick = { recordTake(index) },
+                                        enabled = !isBusy
+                                    ) {
+                                        Text("Record")
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    recordWakeWordError?.let { error ->
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            text = error,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = { saveCustomWakeWord() },
+                    enabled = isNameValid && allTakesRecorded && !isBusy
+                ) {
+                    if (isSavingTemplate) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text("Save")
+                    }
+                }
+            },
+            dismissButton = {
+                if (!isBusy) {
+                    OutlinedButton(onClick = { showRecordWakeWordDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
+
+    if (showModeDialog) {
+        AlertDialog(
+            onDismissRequest = { showModeDialog = false },
+            title = { Text("Choose Assistant Mode") },
+            text = {
+                Column {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                Preferences.operationMode = OperationMode.EXTERNAL_APP
+                                operationMode = OperationMode.EXTERNAL_APP
+                                showModeDialog = false
+                            }
+                            .padding(vertical = 12.dp)
+                    ) {
+                        Column {
+                            Text("Launch External Assistant App", fontWeight = FontWeight.Medium)
+                            Text(
+                                "Use Google Assistant, ChatGPT, or another installed app.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                Preferences.operationMode = OperationMode.STANDALONE_AI
+                                operationMode = OperationMode.STANDALONE_AI
+                                showModeDialog = false
+                            }
+                            .padding(vertical = 12.dp)
+                    ) {
+                        Column {
+                            Text("Standalone AI", fontWeight = FontWeight.Medium)
+                            Text(
+                                "Assistant answers you directly using your own AI API key.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    if (showApiKeyDialog) {
+        val provider = LlmProviders.byId(Preferences.llmProviderId) ?: LlmProviders.all.first()
+        AlertDialog(
+            onDismissRequest = { showApiKeyDialog = false },
+            title = { Text("${provider.displayName} API Key") },
+            text = {
+                OutlinedTextField(
+                    value = apiKeyInput,
+                    onValueChange = { apiKeyInput = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true,
+                    visualTransformation = PasswordVisualTransformation()
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        SecureCredentials.setApiKey(provider.id, apiKeyInput.trim())
+                        isApiKeyConfigured = SecureCredentials.hasAnyKeyConfigured()
+                        showApiKeyDialog = false
+                    },
+                    enabled = apiKeyInput.isNotBlank()
+                ) {
+                    Text("Save")
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showApiKeyDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -1002,6 +1431,21 @@ private val SENSITIVITY_OPTIONS: List<Pair<String, Float>> = listOf(
     "Balanced"  to 0.5f,
     "Strict"    to 0.7f
 )
+
+// Cosine similarity between recorded-template embeddings sits in a different, narrower
+// band than the trained classifiers' scores — these are starting points pending real tuning.
+private val TEMPLATE_SENSITIVITY_OPTIONS: List<Pair<String, Float>> = listOf(
+    "Easiest"   to 0.55f,
+    "Easy"      to 0.65f,
+    "Balanced"  to 0.75f,
+    "Strict"    to 0.85f
+)
+
+private fun languageLabel(language: AssistantLanguage): String = when (language) {
+    AssistantLanguage.AUTO -> "Auto (Device Default)"
+    AssistantLanguage.ENGLISH -> "English"
+    AssistantLanguage.ARABIC -> "Arabic"
+}
 
 private val AUDIO_SOURCE_OPTIONS: List<Pair<String, Int>> = listOf(
     "Default"      to MediaRecorder.AudioSource.DEFAULT,

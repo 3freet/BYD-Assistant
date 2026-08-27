@@ -27,10 +27,12 @@ private enum class VadMode {
     SILERO_STREAMING
 }
 
+/** Exactly one of `modelFile` (trained classifier) / `templateEmbedding` (recorded template) must be non-null. */
 class WakeWordDetector(
     private val context: Context,
     private val audioSource: Int,
-    private val modelFile: String,
+    private val modelFile: String?,
+    private val templateEmbedding: FloatArray?,
     private val verifierFile: String?,
     private val minScore: Float,
     private val minVerifierScore: Float,
@@ -228,13 +230,15 @@ class WakeWordDetector(
         sileroSession = loadAsset("silero_vad_16k_op15.onnx")
         melSession = loadAsset("melspectrogram.onnx")
         embeddingSession = loadAsset("embedding_model.onnx")
-        classifierSession = loaFile(modelFile)
+        if (modelFile != null) {
+            classifierSession = loaFile(modelFile)
+            classifierInputName = classifierSession.inputNames.first()
+        }
         if (verifierFile != null)
             verifierSession = loadAsset(verifierFile)
 
         melInputName = melSession.inputNames.first()
         embeddingInputName = embeddingSession.inputNames.first()
-        classifierInputName = classifierSession.inputNames.first()
         if (verifierFile != null)
             verifierInputName = verifierSession.inputNames.first()
     }
@@ -483,6 +487,11 @@ class WakeWordDetector(
     // ── Wake-word classification ─────────────────────────────────────────────────
 
     private fun evaluateWakeWord() {
+        if (templateEmbedding != null) {
+            evaluateByTemplateSimilarity(templateEmbedding)
+            return
+        }
+
         embOutputDirect.clear()
         for (emb in embeddingQueue) {
             embOutputDirect.put(emb, 0, embeddingDim)
@@ -514,6 +523,20 @@ class WakeWordDetector(
         }
     }
 
+    /** Mean-pools the live embedding window and compares it to a recorded template via cosine similarity. */
+    private fun evaluateByTemplateSimilarity(template: FloatArray) {
+        val query = FloatArray(embeddingDim)
+        for (emb in embeddingQueue) {
+            for (i in 0 until embeddingDim) query[i] += emb[i]
+        }
+        for (i in 0 until embeddingDim) query[i] /= numEmbeddings
+
+        val score = cosineSimilarity(query, template)
+        Log.d("WakeWordDetector", "Template similarity: ${"%.6f".format(score)} of ${"%.6f".format(minScore)}")
+
+        if (score >= minScore) onWakeWordDetected(score)
+    }
+
     private fun onWakeWordDetected(score: Float) {
         cooldownRemaining = cooldownTotalCycles
         onDetected(score)
@@ -524,6 +547,18 @@ class WakeWordDetector(
     companion object {
         private fun allocateDirectFloat(count: Int) =
             ByteBuffer.allocateDirect(count * 4).order(ByteOrder.nativeOrder()).asFloatBuffer()
+
+        private fun cosineSimilarity(a: FloatArray, b: FloatArray): Float {
+            var dot = 0f
+            var normA = 0f
+            var normB = 0f
+            for (i in a.indices) {
+                dot += a[i] * b[i]
+                normA += a[i] * a[i]
+                normB += b[i] * b[i]
+            }
+            return dot / (kotlin.math.sqrt(normA) * kotlin.math.sqrt(normB) + 1e-6f)
+        }
     }
 
     // ── Inner data structures ────────────────────────────────────────────────────

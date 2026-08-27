@@ -14,12 +14,17 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
 import java.io.FileOutputStream
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import java.util.concurrent.TimeUnit
 import kotlin.jvm.Throws
 
 object WakeWordModelManager {
     private const val TAG = "WakeWordModelManager"
     const val MODELS_PATH = "openwakeword/models"
+    const val TEMPLATE_EXTENSION = ".wwtpl"
+    private const val TEMPLATE_MAGIC = "WWT1"
+    private const val TEMPLATE_EMBEDDING_DIM = 96
 
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
@@ -54,9 +59,17 @@ object WakeWordModelManager {
         ensureDefaultModels(context)
         val files = getModelsDir(context).listFiles() ?: return emptyList()
         return files
-            .filter { it.isFile && it.name.endsWith(".onnx", ignoreCase = true) }
-            .map { it.name.removeSuffix(".onnx") }
+            .filter {
+                it.isFile && (it.name.endsWith(".onnx", ignoreCase = true) ||
+                        it.name.endsWith(TEMPLATE_EXTENSION, ignoreCase = true))
+            }
+            .map { it.name.removeSuffix(".onnx").removeSuffix(TEMPLATE_EXTENSION) }
+            .distinct()
             .sortedWith(String.CASE_INSENSITIVE_ORDER)
+    }
+
+    fun isCustomTemplate(context: Context, modelName: String): Boolean {
+        return File(getModelsDir(context), "$modelName$TEMPLATE_EXTENSION").exists()
     }
 
     fun isInstalled(context: Context, fileName: String): Boolean {
@@ -236,10 +249,65 @@ object WakeWordModelManager {
     }
 
     fun deleteModel(context: Context, modelName: String): Boolean {
-        val isBuiltInModel = isBuiltInModel(context, modelName)
-        if (isBuiltInModel) return false
+        if (isBuiltInModel(context, modelName)) return false
 
-        val file = File(getModelsDir(context), "$modelName.onnx")
-        return if (file.exists()) file.delete() else false
+        val classifierFile = File(getModelsDir(context), "$modelName.onnx")
+        val templateFile = File(getModelsDir(context), "$modelName$TEMPLATE_EXTENSION")
+        return when {
+            classifierFile.exists() -> classifierFile.delete()
+            templateFile.exists() -> templateFile.delete()
+            else -> false
+        }
+    }
+
+    /** Saves a recorded wake word as a pooled embedding "template" (see [TEMPLATE_MAGIC] format). */
+    fun saveCustomTemplate(context: Context, name: String, embedding: FloatArray): Result<String> {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || trimmed.contains('/') || trimmed.contains('.')) {
+            return Result.failure(IllegalArgumentException("Enter a valid name (no \".\" or \"/\")."))
+        }
+        if (embedding.size != TEMPLATE_EMBEDDING_DIM) {
+            return Result.failure(IllegalStateException("Unexpected embedding size: ${embedding.size}"))
+        }
+        if (getInstalledModels(context).any { it.equals(trimmed, ignoreCase = true) }) {
+            return Result.failure(IllegalArgumentException("\"$trimmed\" is already in use."))
+        }
+
+        return try {
+            val buffer = ByteBuffer
+                .allocate(4 + 4 + 8 + TEMPLATE_EMBEDDING_DIM * 4)
+                .order(ByteOrder.nativeOrder())
+            buffer.put(TEMPLATE_MAGIC.toByteArray(Charsets.US_ASCII))
+            buffer.putInt(TEMPLATE_EMBEDDING_DIM)
+            buffer.putLong(System.currentTimeMillis())
+            for (value in embedding) buffer.putFloat(value)
+
+            File(getModelsDir(context), "$trimmed$TEMPLATE_EXTENSION").writeBytes(buffer.array())
+            Result.success(trimmed)
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error saving custom wake word template: $trimmed", e)
+            Result.failure(e)
+        }
+    }
+
+    /** Loads a template saved by [saveCustomTemplate], or null if missing/corrupt. */
+    fun loadCustomTemplate(context: Context, name: String): FloatArray? {
+        val file = File(getModelsDir(context), "$name$TEMPLATE_EXTENSION")
+        if (!file.exists()) return null
+
+        return try {
+            val buffer = ByteBuffer.wrap(file.readBytes()).order(ByteOrder.nativeOrder())
+            val magic = ByteArray(4).also { buffer.get(it) }
+            if (String(magic, Charsets.US_ASCII) != TEMPLATE_MAGIC) return null
+
+            val dim = buffer.getInt()
+            if (dim != TEMPLATE_EMBEDDING_DIM) return null
+            buffer.getLong() // createdAtEpochMillis, currently unused
+
+            FloatArray(dim).also { buffer.asFloatBuffer().get(it) }
+        } catch (e: Throwable) {
+            Log.e(TAG, "Error loading custom wake word template: $name", e)
+            null
+        }
     }
 }

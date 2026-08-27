@@ -20,7 +20,6 @@ class OpenWakeWordDetector(
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var wakeWordEngine: WakeWordDetector? = null
     private val modelsPath = "openwakeword/models"
-    private var modelFile = "${context.filesDir}/$modelsPath/$modelName.onnx"
 
     /**
      * Starts the wake word engine.
@@ -35,15 +34,27 @@ class OpenWakeWordDetector(
         WakeWordModelManager.ensureDefaultModels(context)
     }
 
-    fun start(): Boolean {
-        if (!File(modelFile).exists()) {
-            log("No models found in assets, trying to load default model")
+    private fun classifierFile(name: String) = File("${context.filesDir}/$modelsPath/$name.onnx")
 
-            // fallback to default model
-            modelFile = "${context.filesDir}/$modelsPath/hey_billy.onnx"
-            if (!File(modelFile).exists()) {
-                log("No default models found in assets")
-                return false
+    fun start(): Boolean {
+        var resolvedModelFile: String? = null
+        var resolvedTemplate: FloatArray? = null
+
+        val requestedFile = classifierFile(modelName)
+        if (requestedFile.exists()) {
+            resolvedModelFile = requestedFile.path
+        } else {
+            val template = WakeWordModelManager.loadCustomTemplate(context, modelName)
+            if (template != null) {
+                resolvedTemplate = template
+            } else {
+                log("No model found for \"$modelName\", trying to load default model")
+                val defaultFile = classifierFile("hey_billy")
+                if (!defaultFile.exists()) {
+                    log("No default models found in assets")
+                    return false
+                }
+                resolvedModelFile = defaultFile.path
             }
         }
 
@@ -51,7 +62,8 @@ class OpenWakeWordDetector(
         val engine = WakeWordDetector(
             context = context,
             audioSource = audioSource,
-            modelFile = modelFile,
+            modelFile = resolvedModelFile,
+            templateEmbedding = resolvedTemplate,
             verifierFile = null,
             minScore = sensitivity,
             minVerifierScore = 0.1f, // 0 = skip

@@ -25,6 +25,8 @@ import kotlinx.coroutines.SupervisorJob
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import com.kangrio.byd.assistant.ota.OtaUpdater
+import com.kangrio.byd.assistant.standalone.StandaloneAssistantController
+import com.kangrio.byd.assistant.util.OperationMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -86,6 +88,14 @@ class VoiceWakeService : Service() {
             SET_AUDIO_SOURCE -> {
                 val source = intent.extras?.getInt("source") ?: return START_STICKY
                 setAudioSource(source)
+            }
+
+            START_STANDALONE_SESSION -> {
+                scope.launch(Dispatchers.IO) {
+                    detector?.pause()
+                    runStandaloneSession()
+                    detector?.resume()
+                }
             }
         }
 
@@ -167,13 +177,23 @@ class VoiceWakeService : Service() {
         scope.launch(Dispatchers.IO) {
             detector?.pause()
 
-            withContext(Dispatchers.Main) {
-                Utils.startVoiceAssistant(this@VoiceWakeService)
+            if (Preferences.operationMode == OperationMode.STANDALONE_AI) {
+                // Held for the actual session duration (STT+LLM+TTS), not a fixed debounce,
+                // to avoid the detector's own AudioRecord contending for the mic mid-session.
+                runStandaloneSession()
+            } else {
+                withContext(Dispatchers.Main) {
+                    Utils.startVoiceAssistant(this@VoiceWakeService)
+                }
+                delay(DEBOUNCE_DELAY_MS.milliseconds)
             }
 
-            delay(DEBOUNCE_DELAY_MS.milliseconds)
             detector?.resume()
         }
+    }
+
+    private suspend fun runStandaloneSession() {
+        StandaloneAssistantController.runSession(this@VoiceWakeService) { status -> showToast(status) }
     }
 
     override fun onDestroy() {
@@ -250,6 +270,7 @@ class VoiceWakeService : Service() {
         const val SET_MODEL = "com.kangrio.byd.assistant.action.SET_MODEL"
         const val SET_SENSITIVITY = "com.kangrio.byd.assistant.action.SET_SENSITIVITY"
         const val SET_AUDIO_SOURCE = "com.kangrio.byd.assistant.action.SET_AUDIO_SOURCE"
+        const val START_STANDALONE_SESSION = "com.kangrio.byd.assistant.action.START_STANDALONE_SESSION"
 
         fun startService(context: Context) {
             if (isStarted || !Utils.setupCompleted(context)) return
