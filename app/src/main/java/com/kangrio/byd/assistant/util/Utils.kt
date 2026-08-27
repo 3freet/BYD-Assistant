@@ -25,7 +25,7 @@ import androidx.core.content.edit
 import androidx.core.net.toUri
 import com.kangrio.byd.assistant.Constant
 import com.kangrio.byd.assistant.R
-import com.kangrio.byd.assistant.StartActivity
+import com.kangrio.byd.assistant.VoiceAssistantTriggerActivity
 import com.kangrio.byd.assistant.data.AssistantApp
 import com.kangrio.byd.assistant.service.VoiceWakeService
 
@@ -155,10 +155,11 @@ object Utils {
      */
     fun startVoiceAssistant(context: Context) {
         try {
-            // Redirect through StartActivity when called from a non-Activity context
+            // Redirect through a bridge Activity when called from a non-Activity context (the
+            // floating button, wake-word detection) — ACTION_ASSIST needs an Activity context.
             if (context !is Activity) {
                 context.startActivity(
-                    Intent(context, StartActivity::class.java).apply {
+                    Intent(context, VoiceAssistantTriggerActivity::class.java).apply {
                         flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     }
                 )

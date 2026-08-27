@@ -7,11 +7,18 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.provider.Settings
 import android.util.Log
+import android.view.Gravity
+import android.view.MotionEvent
+import android.view.View
+import android.view.WindowManager
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -30,6 +37,7 @@ import com.kangrio.byd.assistant.util.OperationMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.abs
 import kotlin.time.Duration.Companion.milliseconds
 
 class VoiceWakeService : Service() {
@@ -37,6 +45,10 @@ class VoiceWakeService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val handler = Handler(Looper.getMainLooper())
     lateinit var toast: Toast
+
+    private val windowManager by lazy { getSystemService(WINDOW_SERVICE) as WindowManager }
+    private var floatingButtonView: View? = null
+    private var floatingButtonParams: WindowManager.LayoutParams? = null
 
     private val screenReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent?) {
@@ -60,6 +72,8 @@ class VoiceWakeService : Service() {
         scope.launch {
             startHotwordDetection()
         }
+
+        updateFloatingButtonVisibility()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -96,6 +110,10 @@ class VoiceWakeService : Service() {
                     runStandaloneSession()
                     detector?.resume()
                 }
+            }
+
+            REFRESH_FLOATING_BUTTON -> {
+                updateFloatingButtonVisibility()
             }
         }
 
@@ -202,11 +220,123 @@ class VoiceWakeService : Service() {
             unregisterReceiver(screenReceiver)
         } catch (_: Exception) {}
         stopHotwordDetection()
+        removeFloatingButton()
         super.onDestroy()
     }
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
+    }
+
+    /** Adds or removes the floating overlay button to match current settings/permission state.
+     * This is the primary way to trigger voice mode now that opening the app just shows its UI —
+     * see [com.kangrio.byd.assistant.StartActivity]. Safe to call repeatedly/idempotently. */
+    private fun updateFloatingButtonVisibility() {
+        val shouldShow = Preferences.showFloatingButton &&
+            Settings.canDrawOverlays(this) &&
+            Utils.setupCompleted(this)
+
+        if (shouldShow && floatingButtonView == null) {
+            addFloatingButton()
+        } else if (!shouldShow && floatingButtonView != null) {
+            removeFloatingButton()
+        }
+    }
+
+    private fun addFloatingButton() {
+        val size = (56 * resources.displayMetrics.density).toInt()
+        val view = ImageView(this).apply {
+            setImageResource(R.mipmap.ic_launcher_round)
+            elevation = 8f * resources.displayMetrics.density
+        }
+
+        val overlayType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        } else {
+            @Suppress("DEPRECATION")
+            WindowManager.LayoutParams.TYPE_PHONE
+        }
+        val params = WindowManager.LayoutParams(
+            size,
+            size,
+            overlayType,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.TOP or Gravity.START
+            x = Preferences.floatingButtonX
+            y = Preferences.floatingButtonY
+        }
+
+        attachDragToTrigger(view, params)
+
+        try {
+            windowManager.addView(view, params)
+            floatingButtonView = view
+            floatingButtonParams = params
+        } catch (e: Throwable) {
+            Log.e("VoiceWakeService", "Failed to add floating button", e)
+        }
+    }
+
+    private fun removeFloatingButton() {
+        floatingButtonView?.let {
+            try {
+                windowManager.removeView(it)
+            } catch (_: Throwable) {}
+        }
+        floatingButtonView = null
+        floatingButtonParams = null
+    }
+
+    /** Distinguishes a drag (reposition, persisted for next time) from a tap (starts voice mode)
+     * by movement distance and press duration — the same approach used by every "chat head"-style
+     * floating overlay button. */
+    private fun attachDragToTrigger(view: View, params: WindowManager.LayoutParams) {
+        var initialX = 0
+        var initialY = 0
+        var initialTouchX = 0f
+        var initialTouchY = 0f
+        var downTimeMs = 0L
+        var moved = false
+
+        view.setOnTouchListener { v, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    initialX = params.x
+                    initialY = params.y
+                    initialTouchX = event.rawX
+                    initialTouchY = event.rawY
+                    downTimeMs = System.currentTimeMillis()
+                    moved = false
+                    true
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - initialTouchX).toInt()
+                    val dy = (event.rawY - initialTouchY).toInt()
+                    if (abs(dx) > CLICK_DRAG_TOLERANCE_PX || abs(dy) > CLICK_DRAG_TOLERANCE_PX) moved = true
+                    params.x = initialX + dx
+                    params.y = initialY + dy
+                    try {
+                        windowManager.updateViewLayout(v, params)
+                    } catch (_: Throwable) {}
+                    true
+                }
+
+                MotionEvent.ACTION_UP -> {
+                    if (!moved && System.currentTimeMillis() - downTimeMs < CLICK_MAX_DURATION_MS) {
+                        Utils.startVoiceAssistant(this)
+                    } else {
+                        Preferences.floatingButtonX = params.x
+                        Preferences.floatingButtonY = params.y
+                    }
+                    true
+                }
+
+                else -> false
+            }
+        }
     }
 
     private fun createNotificationChannel() {
@@ -271,6 +401,9 @@ class VoiceWakeService : Service() {
         const val SET_SENSITIVITY = "com.kangrio.byd.assistant.action.SET_SENSITIVITY"
         const val SET_AUDIO_SOURCE = "com.kangrio.byd.assistant.action.SET_AUDIO_SOURCE"
         const val START_STANDALONE_SESSION = "com.kangrio.byd.assistant.action.START_STANDALONE_SESSION"
+        const val REFRESH_FLOATING_BUTTON = "com.kangrio.byd.assistant.action.REFRESH_FLOATING_BUTTON"
+        private const val CLICK_DRAG_TOLERANCE_PX = 12
+        private const val CLICK_MAX_DURATION_MS = 250L
 
         fun startService(context: Context) {
             if (isStarted || !Utils.setupCompleted(context)) return
@@ -311,6 +444,15 @@ class VoiceWakeService : Service() {
             val intent = Intent(context, VoiceWakeService::class.java).apply {
                 action = SET_AUDIO_SOURCE
                 putExtra("source", source)
+            }
+            context.startService(intent)
+        }
+
+        /** Call after [Preferences.showFloatingButton] changes, or after the overlay permission
+         * is granted/revoked, to add/remove the floating button without restarting the service. */
+        fun refreshFloatingButton(context: Context) {
+            val intent = Intent(context, VoiceWakeService::class.java).apply {
+                action = REFRESH_FLOATING_BUTTON
             }
             context.startService(intent)
         }

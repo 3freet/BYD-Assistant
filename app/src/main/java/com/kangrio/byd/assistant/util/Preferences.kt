@@ -64,6 +64,21 @@ object Preferences {
         get() = prefs.getBoolean(Constant.PREFS_PLAY_DING_ON_START, true)
         set(value) = prefs.edit { putBoolean(Constant.PREFS_PLAY_DING_ON_START, value) }
 
+    /** Default on: this is the primary way to trigger voice mode now that the launcher icon just
+     * opens the app normally instead. */
+    var showFloatingButton: Boolean
+        get() = prefs.getBoolean(Constant.PREFS_SHOW_FLOATING_BUTTON, true)
+        set(value) = prefs.edit { putBoolean(Constant.PREFS_SHOW_FLOATING_BUTTON, value) }
+
+    /** Last dragged screen position of the floating button, so it doesn't reset to a corner every restart. */
+    var floatingButtonX: Int
+        get() = prefs.getInt(Constant.PREFS_FLOATING_BUTTON_X, 0)
+        set(value) = prefs.edit { putInt(Constant.PREFS_FLOATING_BUTTON_X, value) }
+
+    var floatingButtonY: Int
+        get() = prefs.getInt(Constant.PREFS_FLOATING_BUTTON_Y, 300)
+        set(value) = prefs.edit { putInt(Constant.PREFS_FLOATING_BUTTON_Y, value) }
+
     /** Default off: arms [com.kangrio.byd.assistant.vehicle.ReflectionVehicleController] as the real
      * dispatcher for matched vehicle commands, in place of the safe logging-only stub. Neither
      * invocation mechanism it tries is confirmed on real hardware yet. */

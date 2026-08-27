@@ -134,6 +134,10 @@ class SettingsActivity : ComponentActivity() {
                         initialOtaRelease = otaRelease,
                         onStateToggle = { state -> onStateToggle(state) },
                         onPlayDingToggle = { state -> Preferences.playDingOnStart = state },
+                        onFloatingButtonToggle = { state ->
+                            Preferences.showFloatingButton = state
+                            VoiceWakeService.refreshFloatingButton(this)
+                        },
                         onVehicleControlToggle = { state -> Preferences.vehicleControlEnabled = state },
                         onAudioSourceChange = { source -> VoiceWakeService.setAudioSource(this, source) },
                         onSensitivityChange = { VoiceWakeService.setSensitivity(this, it) },
@@ -198,6 +202,7 @@ fun SettingsScreen(
     initialOtaRelease: ReleaseInfo? = null,
     onStateToggle: (Boolean) -> Unit,
     onPlayDingToggle: (Boolean) -> Unit = {},
+    onFloatingButtonToggle: (Boolean) -> Unit = {},
     onVehicleControlToggle: (Boolean) -> Unit = {},
     onAudioSourceChange: (Int) -> Unit = {},
     onSensitivityChange: (Float) -> Unit = {},
@@ -363,6 +368,7 @@ fun SettingsScreen(
 
     var isStateOn by remember { mutableStateOf(Preferences.startHotword) }
     var isPlayDing by remember { mutableStateOf(Preferences.playDingOnStart) }
+    var isFloatingButtonEnabled by remember { mutableStateOf(Preferences.showFloatingButton) }
     var isVehicleControlEnabled by remember { mutableStateOf(Preferences.vehicleControlEnabled) }
 
     var isCheckingUpdate by remember { mutableStateOf(false) }
@@ -564,6 +570,23 @@ fun SettingsScreen(
                             }
                         )
                     }
+                }
+
+                SettingRow(
+                    label = "Floating Assistant Button",
+                    description = "Show a floating button over other apps to start the voice assistant."
+                ) {
+                    Switch(
+                        checked = isFloatingButtonEnabled,
+                        onCheckedChange = {
+                            isFloatingButtonEnabled = it
+                            onFloatingButtonToggle(it)
+                        },
+                        modifier = Modifier.semantics {
+                            contentDescription =
+                                "Floating assistant button toggle, ${if (isFloatingButtonEnabled) "on" else "off"}"
+                        }
+                    )
                 }
 
                 SettingRow(
