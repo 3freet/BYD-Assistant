@@ -18,7 +18,7 @@ class AndroidSpeechRecognizerEngine(private val context: Context) : SttEngine {
             return@withContext SttResult.Failure(SttError.NOT_AVAILABLE)
         }
 
-        suspendCancellableCoroutine { continuation ->
+        suspendCancellableCoroutine<SttResult> { continuation ->
             val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
 
             fun finish(result: SttResult) {
