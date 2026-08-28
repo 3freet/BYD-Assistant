@@ -67,6 +67,13 @@ jobs:
           path: ${{ steps.apk-path.outputs.path }}
           if-no-files-found: error
 
+      - name: Upload R8 mapping
+        uses: actions/upload-artifact@v7
+        with:
+          name: beta-mapping
+          path: app/build/outputs/mapping/beta/mapping.txt
+          if-no-files-found: warn
+
       - name: Create PreRelease
         uses: softprops/action-gh-release@v3
         with:
