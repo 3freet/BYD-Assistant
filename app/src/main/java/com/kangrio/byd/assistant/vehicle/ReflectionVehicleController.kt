@@ -53,7 +53,11 @@ class ReflectionVehicleController(private val context: Context) : VehicleControl
 
     /** On a `SecurityException`, its message typically names the missing permission — try to grant it via the
      * existing local-ADB mechanism and retry once. Still just as unconfirmed as everything else here;
-     * this only reduces one specific, previously-anticipated failure mode to a single retry. */
+     * this only reduces one specific, previously-anticipated failure mode to a single retry.
+     *
+     * Uses a short ADB timeout, not the usual 20s: this runs synchronously in the middle of a live
+     * voice command with no "connecting…" UI of its own, so a dead/unreachable ADB connection must
+     * fail fast rather than silently stalling the whole turn (the user just hears nothing happen). */
     private suspend fun retryAfterPermissionGrant(
         command: VehicleCommand,
         value: Int,
@@ -61,7 +65,7 @@ class ReflectionVehicleController(private val context: Context) : VehicleControl
     ): VehicleDispatchResult {
         val permission = original.detail?.let { PERMISSION_NAME_REGEX.find(it)?.value } ?: return original
         Log.i(TAG, "Security denied for ${command.id}, attempting to grant $permission via ADB and retrying")
-        Utils.adbRequestPermission(context, permission)
+        Utils.adbRequestPermission(context, permission, timeoutMs = LIVE_DISPATCH_ADB_TIMEOUT_MS)
         instanceCache.clear()
         return withContext(Dispatchers.IO) {
             when (val invocation = command.invocation) {
@@ -262,6 +266,7 @@ class ReflectionVehicleController(private val context: Context) : VehicleControl
         private const val TRANSACT_SET_PROPERTY = 3
 
         private val PERMISSION_NAME_REGEX = Regex("[a-zA-Z_]+\\.permission\\.[A-Z_]+")
+        private const val LIVE_DISPATCH_ADB_TIMEOUT_MS = 3_000L
 
         private val GENERIC_ROUTE_CLASS_BY_DOMAIN = mapOf(
             VehicleDomain.BODYWORK to "android.hardware.bydauto.bodywork.BYDAutoBodyworkDevice",

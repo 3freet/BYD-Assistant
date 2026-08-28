@@ -2,9 +2,11 @@ package com.kangrio.byd.assistant.standalone
 
 import android.content.Context
 import android.util.Log
+import com.kangrio.byd.assistant.llm.LlmError
 import com.kangrio.byd.assistant.llm.LlmProviders
 import com.kangrio.byd.assistant.llm.LlmResult
 import com.kangrio.byd.assistant.standalone.stt.AndroidSpeechRecognizerEngine
+import com.kangrio.byd.assistant.standalone.stt.SttError
 import com.kangrio.byd.assistant.standalone.stt.SttResult
 import com.kangrio.byd.assistant.standalone.tts.AndroidTextToSpeechEngine
 import com.kangrio.byd.assistant.standalone.tts.TtsResult
@@ -16,6 +18,7 @@ import com.kangrio.byd.assistant.vehicle.VehicleCommandRouter
 import com.kangrio.byd.assistant.vehicle.VehicleConfirmationPhrases
 import com.kangrio.byd.assistant.vehicle.VehicleController
 import com.kangrio.byd.assistant.vehicle.VehicleSafety
+import kotlinx.coroutines.sync.Mutex
 
 /**
  * Runs one Listen -> think -> speak turn for standalone mode. Status updates go through
@@ -29,12 +32,29 @@ object StandaloneAssistantController {
      * effect immediately, without an app restart. */
     var vehicleControllerOverride: VehicleController? = null
 
+    // Guards against two triggers overlapping (e.g. the floating button tapped while a wake-word
+    // session is already listening/speaking) — both would otherwise contend for the same mic and
+    // TTS engine. A later trigger is dropped rather than queued; the driver can just try again.
+    private val sessionLock = Mutex()
+
     private fun resolveVehicleController(context: Context): VehicleController =
         vehicleControllerOverride
             ?: if (Preferences.vehicleControlEnabled) ReflectionVehicleController(context.applicationContext)
             else LoggingVehicleController
 
     suspend fun runSession(context: Context, onStatus: (String) -> Unit) {
+        if (!sessionLock.tryLock()) {
+            Log.w(TAG, "runSession already in progress — ignoring concurrent trigger")
+            return
+        }
+        try {
+            runSessionLocked(context, onStatus)
+        } finally {
+            sessionLock.unlock()
+        }
+    }
+
+    private suspend fun runSessionLocked(context: Context, onStatus: (String) -> Unit) {
         val languageTag = Preferences.assistantLanguage.bcp47.ifEmpty { null }
 
         onStatus("Listening…")
@@ -43,7 +63,7 @@ object StandaloneAssistantController {
             is SttResult.Success -> sttResult.text
             is SttResult.Failure -> {
                 Log.w(TAG, "STT failed: ${sttResult.reason}")
-                onStatus("Didn't catch that.")
+                onStatus(sttStatusMessage(sttResult.reason))
                 return
             }
         }
@@ -77,7 +97,7 @@ object StandaloneAssistantController {
             is LlmResult.Success -> llmResult.text
             is LlmResult.Failure -> {
                 Log.w(TAG, "LLM failed: ${llmResult.reason}")
-                onStatus("Couldn't reach ${provider.displayName}.")
+                onStatus(llmStatusMessage(llmResult.reason, provider.displayName))
                 return
             }
         }
@@ -88,5 +108,19 @@ object StandaloneAssistantController {
             Log.w(TAG, "TTS failed: ${ttsResult.reason}")
             onStatus("Couldn't speak the reply.")
         }
+    }
+
+    private fun sttStatusMessage(reason: SttError): String = when (reason) {
+        SttError.NO_SPEECH_DETECTED -> "Didn't catch that."
+        SttError.NETWORK_ERROR -> "No network for speech recognition."
+        SttError.PERMISSION_DENIED -> "Microphone permission is required."
+        SttError.NOT_AVAILABLE, SttError.TIMEOUT, SttError.UNKNOWN -> "Speech recognition isn't available right now."
+    }
+
+    private fun llmStatusMessage(reason: LlmError, providerName: String): String = when (reason) {
+        LlmError.INVALID_API_KEY -> "Check your $providerName API key in Settings."
+        LlmError.RATE_LIMITED -> "$providerName is rate-limiting requests — try again shortly."
+        LlmError.NETWORK_ERROR -> "No network connection."
+        LlmError.PROVIDER_ERROR, LlmError.EMPTY_RESPONSE -> "Couldn't reach $providerName."
     }
 }

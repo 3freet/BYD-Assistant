@@ -99,4 +99,59 @@ class VehicleCommandJsonLoaderTest {
         assertTrue(specs.single() is VehicleIntentSpec.NumericSlot)
         assertEquals("test.acBinder", specs.single().commandId)
     }
+
+    // ── toSafeVehicleCommands(): registry-level graceful degradation ────────────────────────
+    // One malformed/unsafe entry must never take the whole registry (and therefore the whole
+    // voice pipeline, since VehicleCommandRegistry is touched on every utterance) down with it.
+
+    private fun validDto(id: String, domain: String = "CLIMATE") = CommandEntryDto(
+        id = id,
+        domain = domain,
+        displayName = "Test",
+        featureId = 1,
+        invocation = InvocationDto(
+            type = "acBinderProperty",
+            subServiceKey = "AC_AIRCONDITIONER_SERVICE",
+            interfaceDescriptor = "com.byd.ac.IAcAirConditioner",
+        ),
+        parameter = ParameterDto(type = "range", min = 0, max = 3),
+    )
+
+    @Test
+    fun `a malformed entry is dropped, not thrown, and other entries still load`() {
+        val malformed = CommandEntryDto(
+            id = "test.broken",
+            domain = "NOT_A_REAL_DOMAIN",
+            displayName = "Test",
+            invocation = InvocationDto(type = "genericFeatureSet"),
+            parameter = ParameterDto(type = "range", min = 0, max = 1),
+        )
+        val good = validDto("test.good")
+
+        val known = listOf(malformed, good).toSafeVehicleCommands()
+
+        assertTrue(known.none { it.id == "test.broken" })
+        assertTrue(known.any { it.id == "test.good" })
+    }
+
+    @Test
+    fun `a blocked-domain entry is dropped, not thrown`() {
+        val blocked = validDto("test.blocked", domain = "GEARBOX")
+        val good = validDto("test.good")
+
+        val known = listOf(blocked, good).toSafeVehicleCommands()
+
+        assertTrue(known.none { it.id == "test.blocked" })
+        assertTrue(known.any { it.id == "test.good" })
+    }
+
+    @Test
+    fun `a duplicate id keeps only the first occurrence, not thrown`() {
+        val first = validDto("test.dup")
+        val second = validDto("test.dup")
+
+        val known = listOf(first, second).toSafeVehicleCommands()
+
+        assertEquals(1, known.count { it.id == "test.dup" })
+    }
 }

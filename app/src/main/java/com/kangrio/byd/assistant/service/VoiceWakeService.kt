@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
@@ -29,6 +30,7 @@ import com.kangrio.byd.assistant.util.Utils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import android.content.BroadcastReceiver
 import android.content.IntentFilter
 import com.kangrio.byd.assistant.ota.OtaUpdater
@@ -161,14 +163,19 @@ class VoiceWakeService : Service() {
         val modelName = Preferences.hotwordModelName
         val audioSource = Preferences.micAudioSource
         detector?.stop()
+        detector?.destroy()
         detector = OpenWakeWordDetector(
             context = this@VoiceWakeService,
             audioSource = audioSource,
             modelName = modelName,
             sensitivity = Preferences.hotwordSensitivity,
-        ) {
-            onWakeWordDetected()
-        }
+            onDetected = { onWakeWordDetected() },
+            onError = { error ->
+                isWakeWordStarted = false
+                Log.e("VoiceWakeService", "Hotword detection stopped unexpectedly", error)
+                showToast("Hotword detection stopped unexpectedly")
+            },
+        )
 
         isWakeWordStarted = detector?.start() == true
         if (isWakeWordStarted) {
@@ -180,6 +187,7 @@ class VoiceWakeService : Service() {
 
     fun stopHotwordDetection() {
         detector?.stop()
+        detector?.destroy()
         detector = null
         isWakeWordStarted = false
         showToast("""Hotword Detection Stopped""")
@@ -219,8 +227,10 @@ class VoiceWakeService : Service() {
         try {
             unregisterReceiver(screenReceiver)
         } catch (_: Exception) {}
-        stopHotwordDetection()
+        handler.removeCallbacksAndMessages(null)
+        stopHotwordDetection() // also destroys the detector's own scope, see stopHotwordDetection()
         removeFloatingButton()
+        scope.cancel()
         super.onDestroy()
     }
 
@@ -264,11 +274,14 @@ class VoiceWakeService : Service() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.TOP or Gravity.START
-            x = Preferences.floatingButtonX
-            y = Preferences.floatingButtonY
+            // clampToScreen guards a saved position from a since-changed screen size/orientation,
+            // not just future drags — otherwise a stale off-screen position leaves the button
+            // permanently untappable with no in-app recovery.
+            x = clampToScreen(Preferences.floatingButtonX, size, resources.displayMetrics.widthPixels)
+            y = clampToScreen(Preferences.floatingButtonY, size, resources.displayMetrics.heightPixels)
         }
 
-        attachDragToTrigger(view, params)
+        attachDragToTrigger(view, params, size)
 
         try {
             windowManager.addView(view, params)
@@ -289,16 +302,28 @@ class VoiceWakeService : Service() {
         floatingButtonParams = null
     }
 
+    /** Keeps a coordinate within [0, screenSize - viewSize] so the button can never be dragged (or
+     * restored from a saved position on a since-resized/rotated screen) fully off-screen with no
+     * way back short of toggling it off and on again. */
+    private fun clampToScreen(coordinate: Int, viewSize: Int, screenSize: Int): Int =
+        coordinate.coerceIn(0, (screenSize - viewSize).coerceAtLeast(0))
+
     /** Distinguishes a drag (reposition, persisted for next time) from a tap (starts voice mode)
      * by movement distance and press duration — the same approach used by every "chat head"-style
      * floating overlay button. */
-    private fun attachDragToTrigger(view: View, params: WindowManager.LayoutParams) {
+    private fun attachDragToTrigger(view: View, params: WindowManager.LayoutParams, viewSize: Int) {
         var initialX = 0
         var initialY = 0
         var initialTouchX = 0f
         var initialTouchY = 0f
         var downTimeMs = 0L
         var moved = false
+        val dragTolerancePx = CLICK_DRAG_TOLERANCE_DP * resources.displayMetrics.density
+
+        fun persistPosition() {
+            Preferences.floatingButtonX = params.x
+            Preferences.floatingButtonY = params.y
+        }
 
         view.setOnTouchListener { v, event ->
             when (event.action) {
@@ -313,11 +338,11 @@ class VoiceWakeService : Service() {
                 }
 
                 MotionEvent.ACTION_MOVE -> {
-                    val dx = (event.rawX - initialTouchX).toInt()
-                    val dy = (event.rawY - initialTouchY).toInt()
-                    if (abs(dx) > CLICK_DRAG_TOLERANCE_PX || abs(dy) > CLICK_DRAG_TOLERANCE_PX) moved = true
-                    params.x = initialX + dx
-                    params.y = initialY + dy
+                    val dx = event.rawX - initialTouchX
+                    val dy = event.rawY - initialTouchY
+                    if (abs(dx) > dragTolerancePx || abs(dy) > dragTolerancePx) moved = true
+                    params.x = clampToScreen(initialX + dx.toInt(), viewSize, resources.displayMetrics.widthPixels)
+                    params.y = clampToScreen(initialY + dy.toInt(), viewSize, resources.displayMetrics.heightPixels)
                     try {
                         windowManager.updateViewLayout(v, params)
                     } catch (_: Throwable) {}
@@ -328,9 +353,16 @@ class VoiceWakeService : Service() {
                     if (!moved && System.currentTimeMillis() - downTimeMs < CLICK_MAX_DURATION_MS) {
                         Utils.startVoiceAssistant(this)
                     } else {
-                        Preferences.floatingButtonX = params.x
-                        Preferences.floatingButtonY = params.y
+                        persistPosition()
                     }
+                    true
+                }
+
+                // The system can steal the touch stream mid-gesture (e.g. another window taking
+                // focus) — without this, a position already applied via updateViewLayout() above
+                // would never get persisted, leaving the visible and saved positions out of sync.
+                MotionEvent.ACTION_CANCEL -> {
+                    if (moved) persistPosition()
                     true
                 }
 
@@ -355,15 +387,42 @@ class VoiceWakeService : Service() {
         }
 
         handler.post(object : Runnable {
+            var attempts = 0
             override fun run() {
                 try {
-                    startForeground(NOTIFICATION_ID, createNotification())
+                    startForegroundSafely()
                 } catch (e: Throwable) {
-                    Log.e("VoiceWakeService", "Error creating notification", e)
-                    handler.postDelayed(this, 1000)
+                    attempts++
+                    Log.e("VoiceWakeService", "Error starting foreground (attempt $attempts)", e)
+                    if (attempts < MAX_START_FOREGROUND_RETRIES) {
+                        handler.postDelayed(this, 1000)
+                    } else {
+                        Log.e("VoiceWakeService", "Giving up on startForeground after $attempts attempts")
+                    }
                 }
             }
         })
+    }
+
+    /**
+     * The manifest declares `foregroundServiceType="microphone"`, but RECORD_AUDIO isn't required
+     * to reach this service in every [com.kangrio.byd.assistant.util.OperationMode] (see
+     * [com.kangrio.byd.assistant.util.Utils.setupCompleted]). On API 29+, `startForeground()`
+     * throws `SecurityException` for a microphone-typed start without that permission, so the
+     * type actually requested here is chosen at call time instead of always using the manifest's.
+     */
+    private fun startForegroundSafely() {
+        val notification = createNotification()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val type = if (Utils.isGranted(this, android.Manifest.permission.RECORD_AUDIO)) {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+            } else {
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_NONE
+            }
+            startForeground(NOTIFICATION_ID, notification, type)
+        } else {
+            startForeground(NOTIFICATION_ID, notification)
+        }
     }
 
     private fun createNotification(): Notification {
@@ -402,8 +461,9 @@ class VoiceWakeService : Service() {
         const val SET_AUDIO_SOURCE = "com.kangrio.byd.assistant.action.SET_AUDIO_SOURCE"
         const val START_STANDALONE_SESSION = "com.kangrio.byd.assistant.action.START_STANDALONE_SESSION"
         const val REFRESH_FLOATING_BUTTON = "com.kangrio.byd.assistant.action.REFRESH_FLOATING_BUTTON"
-        private const val CLICK_DRAG_TOLERANCE_PX = 12
+        private const val CLICK_DRAG_TOLERANCE_DP = 8
         private const val CLICK_MAX_DURATION_MS = 250L
+        private const val MAX_START_FOREGROUND_RETRIES = 10
 
         fun startService(context: Context) {
             if (isStarted || !Utils.setupCompleted(context)) return

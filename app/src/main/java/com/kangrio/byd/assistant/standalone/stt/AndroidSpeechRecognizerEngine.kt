@@ -9,6 +9,7 @@ import android.speech.SpeechRecognizer
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 
 class AndroidSpeechRecognizerEngine(private val context: Context) : SttEngine {
@@ -18,7 +19,16 @@ class AndroidSpeechRecognizerEngine(private val context: Context) : SttEngine {
             return@withContext SttResult.Failure(SttError.NOT_AVAILABLE)
         }
 
-        suspendCancellableCoroutine<SttResult> { continuation ->
+        // A watchdog, not the expected path: SpeechRecognizer normally ends itself via its own
+        // silence timeout. This exists for the vendor/OEM recognizer implementations (a real risk
+        // on non-Google automotive Android builds) that never fire onResults/onError at all.
+        withTimeoutOrNull(TRANSCRIBE_TIMEOUT_MS) {
+            awaitTranscription(languageTag)
+        } ?: SttResult.Failure(SttError.TIMEOUT)
+    }
+
+    private suspend fun awaitTranscription(languageTag: String?): SttResult =
+        suspendCancellableCoroutine { continuation ->
             val recognizer = SpeechRecognizer.createSpeechRecognizer(context)
 
             fun finish(result: SttResult) {
@@ -68,7 +78,6 @@ class AndroidSpeechRecognizerEngine(private val context: Context) : SttEngine {
                 recognizer.destroy()
             }
         }
-    }
 
     // SpeechRecognizer generally expects a concrete locale rather than a bare language code.
     private fun normalizeLanguageTag(tag: String?): String? = when (tag) {
@@ -76,5 +85,9 @@ class AndroidSpeechRecognizerEngine(private val context: Context) : SttEngine {
         "ar" -> "ar-SA"
         "en" -> "en-US"
         else -> tag
+    }
+
+    companion object {
+        private const val TRANSCRIBE_TIMEOUT_MS = 15_000L
     }
 }

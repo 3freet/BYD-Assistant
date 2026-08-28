@@ -17,7 +17,15 @@ interface GeminiApi {
 
 data class GeminiRequest(
     @SerializedName("contents") val contents: List<GeminiContent>,
-    @SerializedName("systemInstruction") val systemInstruction: GeminiContent? = null
+    @SerializedName("systemInstruction") val systemInstruction: GeminiContent? = null,
+    @SerializedName("generationConfig") val generationConfig: GeminiGenerationConfig? = null,
+)
+
+/** [maxOutputTokens] caps reply length server-side — the system prompt already asks for a short,
+ * spoken-friendly reply, but nothing enforced it: an unusually long reply directly extends TTS
+ * playback time, which is a real distraction risk while driving, not just a latency/cost concern. */
+data class GeminiGenerationConfig(
+    @SerializedName("maxOutputTokens") val maxOutputTokens: Int? = null,
 )
 
 data class GeminiContent(

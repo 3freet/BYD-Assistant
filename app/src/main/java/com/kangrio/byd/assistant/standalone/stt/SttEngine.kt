@@ -10,4 +10,4 @@ sealed interface SttResult {
     data class Failure(val reason: SttError) : SttResult
 }
 
-enum class SttError { NOT_AVAILABLE, NO_SPEECH_DETECTED, NETWORK_ERROR, PERMISSION_DENIED, UNKNOWN }
+enum class SttError { NOT_AVAILABLE, NO_SPEECH_DETECTED, NETWORK_ERROR, PERMISSION_DENIED, TIMEOUT, UNKNOWN }

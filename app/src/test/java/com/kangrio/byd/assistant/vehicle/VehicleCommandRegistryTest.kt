@@ -10,8 +10,9 @@ class VehicleCommandRegistryTest {
 
     @Test
     fun `registry has no blocked-domain commands`() {
-        // Merely loading VehicleCommandRegistry already runs its init{} check that would throw
-        // on a blocked-domain entry; this re-asserts the invariant explicitly for clarity.
+        // toSafeVehicleCommands() filters out any blocked-domain entry (logging loudly) rather
+        // than throwing — see VehicleCommandJsonLoaderTest for that filtering behavior in
+        // isolation. This re-asserts the invariant holds for the real bundled JSON.
         assertTrue(VehicleCommandRegistry.known.none { it.domain.isBlocked })
     }
 

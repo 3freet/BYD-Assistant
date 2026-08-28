@@ -232,6 +232,37 @@ object OtaUpdater {
     }
 
     /**
+     * Downloads and installs an update on [scope] (application-scoped, tied to this singleton's
+     * process lifetime) rather than a caller's own — e.g. `SettingsActivity`'s `onStop()` finishes
+     * the activity on backgrounding, which would otherwise cancel an in-flight coroutine started
+     * on that activity's own scope, silently abandoning the download. [VoiceWakeService] runs as a
+     * persistent foreground service whenever the app is set up, so the process stays alive for
+     * this to complete even if the screen that started it is gone by the time it finishes.
+     * [onProgress]/[onComplete] are best-effort UI hooks for the common case where the caller is
+     * still on screen — safe no-ops otherwise, since the download/install itself doesn't depend
+     * on them.
+     */
+    fun downloadAndInstall(
+        context: Context,
+        downloadUrl: String,
+        fileName: String,
+        onProgress: (progress: Float) -> Unit = {},
+        onComplete: (success: Boolean) -> Unit = {},
+    ) {
+        val appContext = context.applicationContext
+        scope.launch {
+            val file = downloadApk(appContext, downloadUrl, fileName, onProgress)
+            val success = file != null && file.exists()
+            if (success) {
+                installApk(appContext, file!!)
+            } else {
+                Log.e(TAG, "OTA download failed or produced no file")
+            }
+            withContext(Dispatchers.Main) { onComplete(success) }
+        }
+    }
+
+    /**
      * Downloads an APK file to the app's cache directory with progress reporting.
      */
     suspend fun downloadApk(

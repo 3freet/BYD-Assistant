@@ -1,6 +1,7 @@
 package com.kangrio.byd.assistant.llm
 
 import android.util.Log
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -12,6 +13,7 @@ import java.util.concurrent.TimeUnit
 
 object GeminiProvider : LlmProvider {
     private const val TAG = "GeminiProvider"
+    private const val MAX_OUTPUT_TOKENS = 200
 
     override val id = "gemini"
     override val displayName = "Google Gemini"
@@ -40,17 +42,22 @@ object GeminiProvider : LlmProvider {
         try {
             val request = GeminiRequest(
                 contents = listOf(GeminiContent(parts = listOf(GeminiPart(userText)))),
-                systemInstruction = GeminiContent(parts = listOf(GeminiPart(systemInstructionFor(replyLanguage))))
+                systemInstruction = GeminiContent(parts = listOf(GeminiPart(systemInstructionFor(replyLanguage)))),
+                generationConfig = GeminiGenerationConfig(maxOutputTokens = MAX_OUTPUT_TOKENS),
             )
             val response = api.generateContent(model, apiKey, request)
             val text = response.candidates?.firstOrNull()?.content?.parts?.firstOrNull()?.text?.trim()
 
             if (text.isNullOrBlank()) LlmResult.Failure(LlmError.EMPTY_RESPONSE)
             else LlmResult.Success(text)
+        } catch (e: CancellationException) {
+            throw e // structured concurrency: a cancelled turn must propagate, not become a "failure"
         } catch (e: HttpException) {
             Log.e(TAG, "generateReply failed: HTTP ${e.code()}", e)
             val error = when (e.code()) {
-                400, 401, 403 -> LlmError.INVALID_API_KEY
+                // 400 is NOT bucketed here: Gemini also returns it for a malformed request or an
+                // unsupported/deprecated model name, neither of which is an API-key problem.
+                401, 403 -> LlmError.INVALID_API_KEY
                 429 -> LlmError.RATE_LIMITED
                 else -> LlmError.PROVIDER_ERROR
             }

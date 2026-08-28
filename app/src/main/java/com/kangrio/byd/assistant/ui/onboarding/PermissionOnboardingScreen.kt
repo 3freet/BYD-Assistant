@@ -520,8 +520,10 @@ fun PermissionOnboardingScreen(
                                 .fillMaxWidth()
                                 .clickable {
                                     Preferences.assistantPackageComponent = assistant.componentName
-                                    Utils.enableVoiceAssistant(context, assistant.componentName)
-                                    isAssistantConfigured = Utils.isEnabledVoiceAssistant(context)
+                                    scope.launch {
+                                        Utils.enableVoiceAssistant(context, assistant.componentName)
+                                        isAssistantConfigured = Utils.isEnabledVoiceAssistant(context)
+                                    }
                                     showAssistantDialog = false
                                 }
                                 .padding(vertical = 12.dp, horizontal = 8.dp),
@@ -622,9 +624,17 @@ fun PermissionOnboardingScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        SecureCredentials.setApiKey(provider.id, apiKeyInput.trim())
-                        isApiKeyConfigured = SecureCredentials.hasAnyKeyConfigured()
-                        showProviderDialog = false
+                        val saved = SecureCredentials.setApiKey(provider.id, apiKeyInput.trim())
+                        if (saved) {
+                            isApiKeyConfigured = SecureCredentials.hasAnyKeyConfigured()
+                            showProviderDialog = false
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Couldn't save the API key — secure storage is unavailable on this device.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
                     },
                     enabled = apiKeyInput.isNotBlank()
                 ) {

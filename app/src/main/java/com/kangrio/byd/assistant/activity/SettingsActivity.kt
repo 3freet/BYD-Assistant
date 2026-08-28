@@ -89,7 +89,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.time.Duration.Companion.milliseconds
 
-private var isImportingModel = false
+/** Set right before intentionally navigating away for something we expect to return from (a
+ * document picker, the Logcat screen) — [SettingsActivity.onStop] otherwise finishes this
+ * activity on every backgrounding, since it's meant to be ephemeral otherwise. Reset on resume. */
+private var suppressNextFinish = false
 
 class SettingsActivity : ComponentActivity() {
 
@@ -151,12 +154,12 @@ class SettingsActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
-        isImportingModel = false
+        suppressNextFinish = false
     }
 
     override fun onStop() {
         super.onStop()
-        if (!isImportingModel) {
+        if (!suppressNextFinish) {
             finish()
         }
     }
@@ -344,7 +347,7 @@ fun SettingsScreen(
     val importModelLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
-        isImportingModel = false
+        suppressNextFinish = false
         if (uri != null) {
             scope.launch {
                 val result = WakeWordModelManager.importModelFromUri(context, uri)
@@ -730,7 +733,7 @@ fun SettingsScreen(
                 ) {
                     FilledTonalButton(
                         onClick = {
-                            isImportingModel = true
+                            suppressNextFinish = true
                             importModelLauncher.launch(arrayOf("*/*"))
                         }
                     ) {
@@ -831,6 +834,7 @@ fun SettingsScreen(
                 ) {
                     FilledTonalButton(
                         onClick = {
+                            suppressNextFinish = true
                             context.startActivity(Intent(context, LogcatActivity::class.java))
                         }
                     ) {
@@ -895,7 +899,7 @@ fun SettingsScreen(
                                 .fillMaxWidth()
                                 .clickable {
                                     showAssistantDialog = false
-                                    Utils.enableVoiceAssistant(context, assistant.componentName)
+                                    scope.launch { Utils.enableVoiceAssistant(context, assistant.componentName) }
                                     Preferences.assistantPackageComponent = assistant.componentName
                                     selectedAssistantApp = assistant
                                 }
@@ -1010,23 +1014,24 @@ fun SettingsScreen(
                         if (isDownloadingUpdate) return@Button
                         isDownloadingUpdate = true
                         downloadProgress = 0f
-                        scope.launch {
-                            val file = OtaUpdater.downloadApk(
-                                context = context,
-                                downloadUrl = update.downloadUrl,
-                                fileName = update.apkName.ifEmpty { "Assistant_${update.tagName}.apk" },
-                                onProgress = { progress ->
-                                    downloadProgress = progress
+                        // Runs on OtaUpdater's own scope, not this composable's — the download
+                        // (and the install prompt it ends with) survives even if this screen is
+                        // backgrounded and finished partway through. onProgress/onComplete just
+                        // update this screen's UI when it's still around to show it.
+                        OtaUpdater.downloadAndInstall(
+                            context = context,
+                            downloadUrl = update.downloadUrl,
+                            fileName = update.apkName.ifEmpty { "Assistant_${update.tagName}.apk" },
+                            onProgress = { progress -> downloadProgress = progress },
+                            onComplete = { success ->
+                                isDownloadingUpdate = false
+                                if (success) {
+                                    showUpdateDialog = false
+                                } else {
+                                    Toast.makeText(context, "Failed to download update", Toast.LENGTH_SHORT).show()
                                 }
-                            )
-                            isDownloadingUpdate = false
-                            if (file != null && file.exists()) {
-                                showUpdateDialog = false
-                                OtaUpdater.installApk(context, file)
-                            } else {
-                                Toast.makeText(context, "Failed to download update", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                            },
+                        )
                     },
                     enabled = !isDownloadingUpdate
                 ) {
@@ -1405,9 +1410,17 @@ fun SettingsScreen(
             confirmButton = {
                 Button(
                     onClick = {
-                        SecureCredentials.setApiKey(provider.id, apiKeyInput.trim())
-                        isApiKeyConfigured = SecureCredentials.hasAnyKeyConfigured()
-                        showApiKeyDialog = false
+                        val saved = SecureCredentials.setApiKey(provider.id, apiKeyInput.trim())
+                        if (saved) {
+                            isApiKeyConfigured = SecureCredentials.hasAnyKeyConfigured()
+                            showApiKeyDialog = false
+                        } else {
+                            Toast.makeText(
+                                context,
+                                "Couldn't save the API key — secure storage is unavailable on this device.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
                     },
                     enabled = apiKeyInput.isNotBlank()
                 ) {

@@ -1,9 +1,12 @@
 package com.kangrio.byd.assistant.vehicle
 
+import android.util.Log
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.kangrio.byd.assistant.vehicle.intent.VehicleIntentSpec
 import java.io.InputStreamReader
+
+private const val TAG = "VehicleCommandRegistry"
 
 /**
  * Known BYD vehicle controls, loaded from `vehicle_commands.json` (bundled as a classpath
@@ -19,44 +22,42 @@ import java.io.InputStreamReader
  *
  * Scope is a denylist, not an allowlist: anything not in [VehicleDomain]'s blocked set is fair
  * game to add as a new entry in the JSON — see [VehicleDomain] for the hard-blocked domains.
+ *
+ * Loading fails **per-entry, not for the whole registry**: this object is touched on every single
+ * voice utterance (via [VehicleCommandRouter]), including ones with nothing to do with the car, so
+ * one malformed hand-edit to the JSON must never brick the entire assistant. A bad/unrecognized
+ * entry, a blocked-domain entry, or a duplicate id is dropped and logged loudly instead of thrown —
+ * [VehicleCommandRouter] and [VehicleSafety] remain the hard, throwing gates at match/dispatch
+ * time, so this relaxation doesn't weaken the actual safety floor.
  */
 object VehicleCommandRegistry {
     private const val RESOURCE_NAME = "vehicle_commands.json"
 
     /** Package-internal so [VehicleIntentSpec] data can be derived from the same parsed file
      * without a second read; the parsed [VehicleCommand]s are the only public surface. */
-    internal val entries: List<CommandEntryDto> = loadEntries()
+    internal val entries: List<CommandEntryDto> = loadEntriesSafely()
 
-    val known: List<VehicleCommand> = entries.map { it.toVehicleCommand() }
+    val known: List<VehicleCommand> = entries.toSafeVehicleCommands()
 
     fun byId(id: String): VehicleCommand? = known.find { it.id == id }
 
-    init {
-        check(known.none { it.domain.isBlocked }) {
-            "Registry must not contain blocked-domain commands: " +
-                known.filter { it.domain.isBlocked }.map { it.id }
-        }
-        check(known.map { it.id }.distinct().size == known.size) {
-            "Registry contains duplicate command ids"
-        }
-    }
-
-    private fun loadEntries(): List<CommandEntryDto> {
+    private fun loadEntriesSafely(): List<CommandEntryDto> = try {
         val stream = javaClass.classLoader?.getResourceAsStream(RESOURCE_NAME)
             ?: error("$RESOURCE_NAME not found on the classpath")
-        val entries: List<CommandEntryDto> = stream.use {
+        stream.use {
             InputStreamReader(it, Charsets.UTF_8).use { reader ->
                 Gson().fromJson(reader, object : TypeToken<List<CommandEntryDto>>() {}.type)
             }
         }
-        return entries
+    } catch (e: Exception) {
+        Log.e(TAG, "Failed to load $RESOURCE_NAME — vehicle control is unavailable this session", e)
+        emptyList()
     }
 }
 
 // ── JSON DTOs and mapping to the sealed domain types ────────────────────────────────────────
 // Kept as loose/nullable DTOs (rather than Gson polymorphic deserializers onto the sealed types
-// directly) so a malformed or unrecognized "type" discriminator fails loudly via error() below —
-// fail closed, never silently default to something permissive.
+// directly) so a malformed or unrecognized "type" discriminator is easy to catch per-entry below.
 
 internal data class CommandEntryDto(
     val id: String,
@@ -96,6 +97,33 @@ internal data class IntentDto(
     val phrases: Map<String, List<String>> = emptyMap(),
     val confirmation: Map<String, String> = emptyMap(),
 )
+
+/** Maps every entry, dropping (and loudly logging) anything that fails to parse, names a blocked
+ * domain, or duplicates an id already seen — never throws, so one bad entry can't take the whole
+ * registry (and therefore the whole voice pipeline) down with it. */
+internal fun List<CommandEntryDto>.toSafeVehicleCommands(): List<VehicleCommand> {
+    val parsed = mapNotNull { entry ->
+        try {
+            entry.toVehicleCommand()
+        } catch (e: Exception) {
+            Log.e(TAG, "Dropping malformed vehicle command '${entry.id}': ${e.message}")
+            null
+        }
+    }
+
+    val (safe, blocked) = parsed.partition { !it.domain.isBlocked }
+    if (blocked.isNotEmpty()) {
+        Log.e(TAG, "Dropping blocked-domain commands that should never have been in the registry: ${blocked.map { it.id }}")
+    }
+
+    val seenIds = HashSet<String>()
+    val deduped = safe.filter { seenIds.add(it.id) }
+    if (deduped.size != safe.size) {
+        Log.e(TAG, "Dropped duplicate command ids: ${safe.map { it.id }.groupBy { it }.filterValues { it.size > 1 }.keys}")
+    }
+
+    return deduped
+}
 
 internal fun CommandEntryDto.toVehicleCommand(): VehicleCommand {
     val domainEnum = VehicleDomain.entries.find { it.name == domain }

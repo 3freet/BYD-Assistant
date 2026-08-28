@@ -37,8 +37,12 @@ object SecureCredentials {
 
     fun getApiKey(providerId: String): String? = prefs?.getString(keyFor(providerId), null)
 
-    fun setApiKey(providerId: String, key: String) {
-        prefs?.edit { putString(keyFor(providerId), key) }
+    /** @return false if encrypted storage never initialized (see [init]) — the key was NOT saved,
+     * and the caller must tell the user rather than assuming success. */
+    fun setApiKey(providerId: String, key: String): Boolean {
+        val store = prefs ?: return false
+        store.edit { putString(keyFor(providerId), key) }
+        return true
     }
 
     fun clearApiKey(providerId: String) {

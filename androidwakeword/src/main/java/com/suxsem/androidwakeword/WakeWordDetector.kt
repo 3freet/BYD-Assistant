@@ -126,6 +126,7 @@ class WakeWordDetector(
 
     // ── Mutable state ────────────────────────────────────────────────────────────
 
+    @Volatile
     private var isPaused = false
 
     // VAD state machine

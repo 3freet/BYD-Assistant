@@ -10,4 +10,4 @@ sealed interface TtsResult {
     data class Failure(val reason: TtsError) : TtsResult
 }
 
-enum class TtsError { LANGUAGE_NOT_SUPPORTED, INIT_FAILED, UNKNOWN }
+enum class TtsError { LANGUAGE_NOT_SUPPORTED, INIT_FAILED, TIMEOUT, UNKNOWN }

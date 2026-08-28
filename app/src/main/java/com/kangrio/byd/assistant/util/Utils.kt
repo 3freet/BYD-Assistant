@@ -44,16 +44,21 @@ object Utils {
     }
 
     /**
-     * Set default voice assistant app to be used.
+     * Set default voice assistant app to be used. Suspends (rather than blocking the calling
+     * thread, which used to be the main thread at every call site — a UI click handler or
+     * `BroadcastReceiver.onReceive()`) for the settle delay Android needs between clearing and
+     * re-setting these secure settings.
      */
-    fun enableVoiceAssistant(context: Context, componentName: String? = null) {
-        val componentName = componentName ?: return
+    suspend fun enableVoiceAssistant(context: Context, componentName: String? = null) {
+        if (componentName.isNullOrEmpty()) return
 
-        putSecureSetting(context, "assistant", null)
-        putSecureSetting(context, "voice_interaction_service", null)
-        Thread.sleep(100)
-        putSecureSetting(context, "assistant", componentName)
-        putSecureSetting(context, "voice_interaction_service", componentName)
+        withContext(Dispatchers.IO) {
+            putSecureSetting(context, "assistant", null)
+            putSecureSetting(context, "voice_interaction_service", null)
+            delay(100)
+            putSecureSetting(context, "assistant", componentName)
+            putSecureSetting(context, "voice_interaction_service", componentName)
+        }
     }
 
     /**
@@ -93,16 +98,19 @@ object Utils {
         val assistant = Settings.Secure.getString(context.contentResolver, "assistant") ?: return AssistantApp()
 
         val component = ComponentName.unflattenFromString(assistant) ?: return AssistantApp()
-        val appInfo = context.packageManager.getPackageInfo(component.packageName, 0)
-        val appLabel = appInfo.applicationInfo?.loadLabel(context.packageManager)?.toString()
-
-        val assistantApp = AssistantApp(
-            name = appLabel ?: "",
-            packageName = component.packageName,
-            className = component.className,
-        )
-
-        return assistantApp
+        return try {
+            val appInfo = context.packageManager.getPackageInfo(component.packageName, 0)
+            val appLabel = appInfo.applicationInfo?.loadLabel(context.packageManager)?.toString()
+            AssistantApp(
+                name = appLabel ?: "",
+                packageName = component.packageName,
+                className = component.className,
+            )
+        } catch (e: PackageManager.NameNotFoundException) {
+            // The "assistant" secure setting can outlive the app it points at (uninstalled since).
+            Log.w("Utils", "Configured assistant package ${component.packageName} not found", e)
+            AssistantApp()
+        }
     }
 
     /**
@@ -246,12 +254,15 @@ object Utils {
     }
 
     /**
-     * Run a shell command via ADB.
+     * Run a shell command via ADB. [timeoutMs] defaults to a generous 20s for callers with an
+     * explicit "connecting…" UI the user is actively watching (e.g. onboarding's permission
+     * grant); pass a much shorter value for a retry attempted synchronously mid-flow, where a
+     * dead ADB connection would otherwise silently stall the caller for the full 20s.
      */
-    suspend fun adbShell(context: Context, cmd: String) =
+    suspend fun adbShell(context: Context, cmd: String, timeoutMs: Long = 20_000L) =
         withContext(Dispatchers.IO) {
             setupUserHome(context)
-            val result = withTimeoutOrNull(20_000L.milliseconds) {
+            val result = withTimeoutOrNull(timeoutMs.milliseconds) {
                 while (isActive) {
                     try {
                         var dAdb = Dadb.discover(connectTimeout = 2000, socketTimeout = 5000)
@@ -279,10 +290,10 @@ object Utils {
     /**
      * Request a permission via ADB.
      */
-    suspend fun adbRequestPermission(context: Context, permission: String) =
+    suspend fun adbRequestPermission(context: Context, permission: String, timeoutMs: Long = 20_000L) =
         withContext(Dispatchers.IO) {
             setupUserHome(context)
-            adbShell(context, "pm grant ${context.packageName} $permission")
+            adbShell(context, "pm grant ${context.packageName} $permission", timeoutMs)
         }
 
     /**
