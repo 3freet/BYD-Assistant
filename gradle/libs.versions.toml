@@ -17,6 +17,7 @@ retrofit = "3.0.0"
 onnxruntimeAndroid = "1.23.2"
 securityCrypto = "1.0.0"
 gson = "2.10.1"
+voskAndroid = "0.3.75"
 
 [libraries]
 accompanist-drawablepainter = { module = "com.google.accompanist:accompanist-drawablepainter", version.ref = "accompanistDrawablepainter" }
@@ -43,6 +44,7 @@ retrofit-converter-gson = { module = "com.squareup.retrofit2:converter-gson", ve
 onnxruntime-android = { module = "com.microsoft.onnxruntime:onnxruntime-android", version.ref = "onnxruntimeAndroid" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+vosk-android = { module = "com.alphacephei:vosk-android", version.ref = "voskAndroid" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

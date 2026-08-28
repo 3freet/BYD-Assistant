@@ -49,6 +49,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import com.kangrio.byd.assistant.data.OnlineSttModels
 import com.kangrio.byd.assistant.data.OnlineWakeWordModel
 import com.kangrio.byd.assistant.data.ReleaseInfo
 import com.kangrio.byd.assistant.llm.LlmProviders
@@ -61,6 +62,7 @@ import com.kangrio.byd.assistant.util.OperationMode
 import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.SecureCredentials
 import com.kangrio.byd.assistant.util.Utils
+import com.kangrio.byd.assistant.util.VoskModelManager
 import com.kangrio.byd.assistant.util.WakeWordModelManager
 import com.suxsem.androidwakeword.EmbeddingExtractor
 import androidx.compose.runtime.Composable
@@ -251,6 +253,11 @@ fun SettingsScreen(
     var onlineModelsError by remember { mutableStateOf<String?>(null) }
     var downloadingModelNames by remember { mutableStateOf<Set<String>>(emptySet()) }
     var modelSearchQuery by remember { mutableStateOf("") }
+
+    var showOfflineSttDialog by remember { mutableStateOf(false) }
+    var enSttModelName by remember { mutableStateOf(VoskModelManager.installedModelName(context, "en")) }
+    var arSttModelName by remember { mutableStateOf(VoskModelManager.installedModelName(context, "ar")) }
+    var downloadingSttModelNames by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     var showRecordWakeWordDialog by remember { mutableStateOf(false) }
     var customWakeWordName by remember { mutableStateOf("") }
@@ -554,6 +561,16 @@ fun SettingsScreen(
                                     )
                                 }
                             }
+                        }
+                    }
+
+                    SettingRow(
+                        label = "Offline Speech Recognition",
+                        description = "Used automatically when the built-in speech recognizer isn't available (no Google Play Services). " +
+                            "English: ${enSttModelName ?: "not downloaded"} · Arabic: ${arSttModelName ?: "not downloaded"}"
+                    ) {
+                        FilledTonalButton(onClick = { showOfflineSttDialog = true }) {
+                            Text("Manage")
                         }
                     }
 
@@ -1429,6 +1446,94 @@ fun SettingsScreen(
             },
             dismissButton = {
                 OutlinedButton(onClick = { showApiKeyDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (showOfflineSttDialog) {
+        AlertDialog(
+            onDismissRequest = { showOfflineSttDialog = false },
+            title = { Text("Offline Speech Recognition") },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        "Downloaded once, used automatically when the device's built-in speech " +
+                            "recognizer isn't available — e.g. no Google Play Services.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(12.dp))
+
+                    OnlineSttModels.catalog.forEach { model ->
+                        val installedName = if (model.languageTag == "en") enSttModelName else arSttModelName
+                        val isInstalled = installedName == model.name
+                        val isDownloading = downloadingSttModelNames.contains(model.name)
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    text = model.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "${model.languageTag.uppercase()} • ${Utils.formatFileSize(model.sizeBytes)} • ${model.license}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                                Text(
+                                    text = model.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+
+                            if (isDownloading) {
+                                CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
+                            } else if (isInstalled) {
+                                FilledTonalButton(
+                                    onClick = {
+                                        VoskModelManager.deleteModel(context, model.languageTag)
+                                        if (model.languageTag == "en") enSttModelName = null else arSttModelName = null
+                                    }
+                                ) {
+                                    Text("Delete")
+                                }
+                            } else {
+                                Button(
+                                    onClick = {
+                                        downloadingSttModelNames = downloadingSttModelNames + model.name
+                                        scope.launch {
+                                            val success = VoskModelManager.downloadAndUnpack(context, model)
+                                            downloadingSttModelNames = downloadingSttModelNames - model.name
+                                            if (success) {
+                                                if (model.languageTag == "en") enSttModelName = model.name else arSttModelName = model.name
+                                                Toast.makeText(context, "Downloaded ${model.name}", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                Toast.makeText(context, "Failed to download ${model.name}", Toast.LENGTH_SHORT).show()
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Text("Download")
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                OutlinedButton(onClick = { showOfflineSttDialog = false }) { Text("Close") }
             }
         )
     }

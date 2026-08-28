@@ -107,6 +107,7 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.androidx.security.crypto)
     implementation(libs.accompanist.drawablepainter)
+    implementation(libs.vosk.android)
     implementation(project(":androidwakeword"))
 
     compileOnly(libs.onnxruntime.android)

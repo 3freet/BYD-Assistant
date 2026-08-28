@@ -6,12 +6,16 @@ import com.kangrio.byd.assistant.llm.LlmError
 import com.kangrio.byd.assistant.llm.LlmProviders
 import com.kangrio.byd.assistant.llm.LlmResult
 import com.kangrio.byd.assistant.standalone.stt.AndroidSpeechRecognizerEngine
+import com.kangrio.byd.assistant.standalone.stt.FallbackSttEngine
+import com.kangrio.byd.assistant.standalone.stt.SttEngine
 import com.kangrio.byd.assistant.standalone.stt.SttError
 import com.kangrio.byd.assistant.standalone.stt.SttResult
+import com.kangrio.byd.assistant.standalone.stt.VoskSttEngine
 import com.kangrio.byd.assistant.standalone.tts.AndroidTextToSpeechEngine
 import com.kangrio.byd.assistant.standalone.tts.TtsResult
 import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.SecureCredentials
+import com.kangrio.byd.assistant.util.VoskModelManager
 import com.kangrio.byd.assistant.vehicle.LoggingVehicleController
 import com.kangrio.byd.assistant.vehicle.ReflectionVehicleController
 import com.kangrio.byd.assistant.vehicle.VehicleCommandRouter
@@ -42,6 +46,28 @@ object StandaloneAssistantController {
             ?: if (Preferences.vehicleControlEnabled) ReflectionVehicleController(context.applicationContext)
             else LoggingVehicleController
 
+    /** [AndroidSpeechRecognizerEngine] needs a `RecognitionService` registered on-device — absent
+     * on a GMS-less build, where it always fails with [SttError.NOT_AVAILABLE]. Falls back to a
+     * fully offline [VoskSttEngine] only when a model has actually been downloaded via Settings
+     * (see [VoskModelManager]) — never attempted otherwise. */
+    private fun resolveSttEngine(context: Context, languageTag: String?): SttEngine {
+        val voskLanguage = resolveVoskLanguage(context, languageTag)
+        val vosk = voskLanguage?.let { VoskSttEngine(VoskModelManager.getModelDir(context, it).absolutePath) }
+        return FallbackSttEngine(AndroidSpeechRecognizerEngine(context), vosk)
+    }
+
+    /** Vosk needs one committed language per recognizer; AUTO has no true on-device dual-language
+     * path, so this just picks whichever single offline model is actually provisioned, preferring
+     * English if both are. */
+    private fun resolveVoskLanguage(context: Context, languageTag: String?): String? {
+        val candidates = when (languageTag) {
+            "ar" -> listOf("ar")
+            "en" -> listOf("en")
+            else -> listOf("en", "ar")
+        }
+        return candidates.firstOrNull { VoskModelManager.isProvisioned(context, it) }
+    }
+
     suspend fun runSession(context: Context, onStatus: (String) -> Unit) {
         if (!sessionLock.tryLock()) {
             Log.w(TAG, "runSession already in progress — ignoring concurrent trigger")
@@ -58,7 +84,7 @@ object StandaloneAssistantController {
         val languageTag = Preferences.assistantLanguage.bcp47.ifEmpty { null }
 
         onStatus("Listening…")
-        val sttResult = AndroidSpeechRecognizerEngine(context).transcribe(languageTag)
+        val sttResult = resolveSttEngine(context, languageTag).transcribe(languageTag)
         val userText = when (sttResult) {
             is SttResult.Success -> sttResult.text
             is SttResult.Failure -> {
