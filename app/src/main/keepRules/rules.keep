@@ -1,3 +1,12 @@
 
 -keep class com.suxsem.androidwakeword.** { *; }
 -keep class ai.onnxruntime.** { *; }
+
+# Vosk (offline speech recognition) binds to native code via JNA, which looks up fields like
+# com.sun.jna.Pointer's "peer" by literal name at runtime (JNI GetFieldID) — R8 renaming that
+# field without these rules produces "UnsatisfiedLinkError: Can't obtain peer field ID".
+-keep class com.sun.jna.** { *; }
+-keepclassmembers class * extends com.sun.jna.** { *; }
+-dontwarn com.sun.jna.**
+-keep class org.vosk.** { *; }
+-dontwarn org.vosk.**
