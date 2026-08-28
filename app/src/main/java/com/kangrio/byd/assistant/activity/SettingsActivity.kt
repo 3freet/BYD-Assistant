@@ -61,6 +61,7 @@ import com.kangrio.byd.assistant.util.AssistantLanguage
 import com.kangrio.byd.assistant.util.OperationMode
 import com.kangrio.byd.assistant.util.Preferences
 import com.kangrio.byd.assistant.util.SecureCredentials
+import com.kangrio.byd.assistant.util.CrashLogger
 import com.kangrio.byd.assistant.util.Utils
 import com.kangrio.byd.assistant.util.VoskModelManager
 import com.kangrio.byd.assistant.util.WakeWordModelManager
@@ -78,6 +79,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.tooling.preview.Preview
@@ -253,6 +255,9 @@ fun SettingsScreen(
     var onlineModelsError by remember { mutableStateOf<String?>(null) }
     var downloadingModelNames by remember { mutableStateOf<Set<String>>(emptySet()) }
     var modelSearchQuery by remember { mutableStateOf("") }
+
+    var showCrashLogDialog by remember { mutableStateOf(false) }
+    var crashLogText by remember { mutableStateOf("") }
 
     var showOfflineSttDialog by remember { mutableStateOf(false) }
     var enSttModelName by remember { mutableStateOf(VoskModelManager.installedModelName(context, "en")) }
@@ -856,6 +861,20 @@ fun SettingsScreen(
                         }
                     ) {
                         Text("Open")
+                    }
+                }
+
+                SettingRow(
+                    label = "Crash Log",
+                    description = "Survives a crash restart, unlike Debug Logcat above."
+                ) {
+                    FilledTonalButton(
+                        onClick = {
+                            crashLogText = CrashLogger.readLog(context)
+                            showCrashLogDialog = true
+                        }
+                    ) {
+                        Text("View")
                     }
                 }
 
@@ -1534,6 +1553,52 @@ fun SettingsScreen(
             },
             confirmButton = {
                 OutlinedButton(onClick = { showOfflineSttDialog = false }) { Text("Close") }
+            }
+        )
+    }
+
+    if (showCrashLogDialog) {
+        AlertDialog(
+            onDismissRequest = { showCrashLogDialog = false },
+            title = { Text("Crash Log") },
+            text = {
+                Box(
+                    modifier = Modifier
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState())
+                ) {
+                    Text(
+                        text = crashLogText,
+                        fontFamily = FontFamily.Monospace,
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            },
+            confirmButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = {
+                            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, crashLogText)
+                            }
+                            context.startActivity(Intent.createChooser(shareIntent, "Share Crash Log"))
+                        }
+                    ) {
+                        Text("Share")
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            CrashLogger.clear(context)
+                            crashLogText = CrashLogger.readLog(context)
+                        }
+                    ) {
+                        Text("Clear")
+                    }
+                    Button(onClick = { showCrashLogDialog = false }) {
+                        Text("Close")
+                    }
+                }
             }
         )
     }
